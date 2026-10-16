@@ -1,7 +1,8 @@
 /**
- * Online Jenga — Phase 1 Core 3D Physics, 360° Camera & Mobile-Adaptive Engine
+ * Online Jenga — Realistic PBR 3-Wood Parlor Edition (360° Camera, Dynamic Chairs & Mobile Adaptive)
  * Uses Three.js + Cannon-es with authentic 7.5 x 2.5 x 1.5 block geometry,
- * micro-variation loose/tight block mechanics, and no-sign-in multiplayer.
+ * 3 distinct timber species (Maple, Cherry Oak, Walnut), parlor room background,
+ * dynamic player chairs around the circular table, and no-sign-in multiplayer.
  */
 
 window.initJengaGame = function () {
@@ -15,12 +16,13 @@ window.initJengaGame = function () {
   const BLOCK_HEIGHT = 1.5;
   const INITIAL_LAYERS = 18;
   const BLOCKS_PER_LAYER = 3;
-  const GAP = 0.03; // Microscopic spacing for clean initial contact normals
+  const GAP = 0.03;
+  const FLOOR_Y = -26;
 
   // Game State
   const state = {
     mode: 'pass',
-    interactionMode: 'pull', // 'pull' (1-finger pulls blocks, background orbits) | 'orbit' (1-finger always orbits 360°)
+    interactionMode: 'pull', // 'pull' | 'orbit'
     players: [
       { name: 'Player 1', color: '#e59838', moves: 0 },
       { name: 'Player 2', color: '#4cd97b', moves: 0 }
@@ -49,6 +51,7 @@ window.initJengaGame = function () {
   const elStatHeight = document.getElementById('stat-height');
   const elStatMoves = document.getElementById('stat-moves');
   const elPlayerList = document.getElementById('player-list');
+  const elSeatCountBadge = document.getElementById('seat-count-badge');
   const elStabilityBar = document.getElementById('stability-bar');
   const elStabilityText = document.getElementById('stability-text');
   const elBlockInspector = document.getElementById('block-inspector');
@@ -60,23 +63,22 @@ window.initJengaGame = function () {
   const elOrbitSlider = document.getElementById('orbit-slider');
   const elCompassReadout = document.getElementById('compass-readout');
 
-  // Three.js Scene Setup
+  // Three.js Scene Setup (Photorealistic Parlor Atmosphere)
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x16110d, 0.0075);
+  scene.fog = new THREE.FogExp2(0x140e0a, 0.0045);
 
   const camera = new THREE.PerspectiveCamera(
-    45,
-    window.innerWidth / window.innerHeight,
+    44,
+    window.innerWidth / Math.max(1, window.innerHeight),
     0.5,
-    300
+    350
   );
 
-  // Adapt camera distance for mobile portrait screens so full 18-story tower fits
   function getIdealCameraDistance() {
     const aspect = window.innerWidth / Math.max(1, window.innerHeight);
-    if (aspect < 0.65) return 52; // Phone portrait
-    if (aspect < 1.0) return 44;  // Tablet portrait
-    return 37;                    // Desktop / landscape
+    if (aspect < 0.65) return 54; // Phone portrait
+    if (aspect < 1.0) return 45;  // Tablet portrait
+    return 38;                    // Desktop / landscape
   }
 
   const initDist = getIdealCameraDistance();
@@ -88,6 +90,7 @@ window.initJengaGame = function () {
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
+    alpha: true,
     powerPreference: 'high-performance'
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -95,22 +98,21 @@ window.initJengaGame = function () {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 1.12;
   container.appendChild(renderer.domElement);
 
   // Full 360° OrbitControls
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 13.5, 0);
+  controls.target.set(0, 13.0, 0);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
   controls.enablePan = false;
-  // Unrestricted 360-degree horizontal rotation around all sides of the tower
   controls.minAzimuthAngle = -Infinity;
   controls.maxAzimuthAngle = Infinity;
   controls.minPolarAngle = 0.12;
-  controls.maxPolarAngle = Math.PI * 0.485; // Keep camera above table
+  controls.maxPolarAngle = Math.PI * 0.49;
   controls.minDistance = 16;
-  controls.maxDistance = 85;
+  controls.maxDistance = 92;
   controls.rotateSpeed = 0.85;
   controls.touches = {
     ONE: THREE.TOUCH.ROTATE,
@@ -118,32 +120,39 @@ window.initJengaGame = function () {
   };
   controls.update();
 
-  // Lighting (Balanced around all 360° sides so no side of the tower is dark)
-  const ambientLight = new THREE.AmbientLight(0xffeedd, 0.72);
+  // Realistic Parlor Room Lighting
+  const ambientLight = new THREE.AmbientLight(0xffe9d2, 0.58);
   scene.add(ambientLight);
 
-  const hemiLight = new THREE.HemisphereLight(0xfff5e4, 0x2e2118, 0.6);
-  hemiLight.position.set(0, 55, 0);
+  const hemiLight = new THREE.HemisphereLight(0xffecd2, 0x261810, 0.62);
+  hemiLight.position.set(0, 65, 0);
   scene.add(hemiLight);
 
-  const dirLight = new THREE.DirectionalLight(0xfff0dd, 1.25);
-  dirLight.position.set(20, 44, 24);
-  dirLight.castShadow = true;
-  dirLight.shadow.mapSize.width = 2048;
-  dirLight.shadow.mapSize.height = 2048;
-  dirLight.shadow.camera.near = 5;
-  dirLight.shadow.camera.far = 100;
-  const d = 24;
-  dirLight.shadow.camera.left = -d;
-  dirLight.shadow.camera.right = d;
-  dirLight.shadow.camera.top = d * 1.6;
-  dirLight.shadow.camera.bottom = -5;
-  dirLight.shadow.bias = -0.0005;
-  scene.add(dirLight);
+  // Warm overhead pendant lamp light casting crisp soft shadows
+  const mainLight = new THREE.DirectionalLight(0xfff1de, 1.45);
+  mainLight.position.set(16, 48, 20);
+  mainLight.castShadow = true;
+  mainLight.shadow.mapSize.width = 2048;
+  mainLight.shadow.mapSize.height = 2048;
+  mainLight.shadow.camera.near = 5;
+  mainLight.shadow.camera.far = 120;
+  const shadowBounds = 34;
+  mainLight.shadow.camera.left = -shadowBounds;
+  mainLight.shadow.camera.right = shadowBounds;
+  mainLight.shadow.camera.top = shadowBounds * 1.4;
+  mainLight.shadow.camera.bottom = -shadowBounds;
+  mainLight.shadow.bias = -0.0004;
+  scene.add(mainLight);
 
-  const backFillLight = new THREE.DirectionalLight(0xf3cfa4, 0.55);
-  backFillLight.position.set(-22, 26, -22);
-  scene.add(backFillLight);
+  // Warm fill light from opposite angle so all 360° sides show rich wood grain
+  const fillLight = new THREE.DirectionalLight(0xf3c892, 0.58);
+  fillLight.position.set(-24, 28, -22);
+  scene.add(fillLight);
+
+  // Warm parlor lamp glow directly above the tower
+  const lampPointLight = new THREE.PointLight(0xffb969, 0.9, 110, 1.4);
+  lampPointLight.position.set(0, 44, 0);
+  scene.add(lampPointLight);
 
   // Cannon-es Physics World
   const world = new CANNON.World();
@@ -171,34 +180,175 @@ window.initJengaGame = function () {
   world.addContactMaterial(woodOnWood);
   world.addContactMaterial(woodOnTable);
 
-  // Tabletop Mesh & 360° Cardinal Side Markers (N / E / S / W)
-  const tableCanvas = window.JengaTextures.createTableCanvas();
-  const tableTex = new THREE.CanvasTexture(tableCanvas);
-  tableTex.anisotropy = 4;
+  // ============================================================================
+  // 3D PARLOR BACKGROUND ENVIRONMENT, PEDESTAL TABLE & DYNAMIC PLAYER CHAIRS
+  // ============================================================================
+  const environmentGroup = new THREE.Group();
+  scene.add(environmentGroup);
 
-  const tableGeo = new THREE.CylinderGeometry(28, 30, 2.4, 64);
-  const tableMat = new THREE.MeshStandardMaterial({
-    map: tableTex,
-    roughness: 0.55,
-    metalness: 0.05
-  });
-  const tableMesh = new THREE.Mesh(tableGeo, tableMat);
-  tableMesh.position.set(0, -1.2, 0);
-  tableMesh.receiveShadow = true;
-  scene.add(tableMesh);
+  function buildParlorEnvironment() {
+    // 1. Hardwood Parlor Floor
+    const floorCanvas = window.JengaTextures.createFloorCanvas();
+    const floorTex = new THREE.CanvasTexture(floorCanvas);
+    floorTex.wrapS = THREE.RepeatWrapping;
+    floorTex.wrapT = THREE.RepeatWrapping;
+    floorTex.repeat.set(8, 8);
+    floorTex.anisotropy = 4;
 
-  // Brass rim around table
-  const rimGeo = new THREE.TorusGeometry(28.05, 0.25, 16, 64);
-  rimGeo.rotateX(Math.PI / 2);
-  const rimMat = new THREE.MeshStandardMaterial({
-    color: 0xc88a4b,
-    roughness: 0.3,
-    metalness: 0.7
-  });
-  const rimMesh = new THREE.Mesh(rimGeo, rimMat);
-  rimMesh.position.set(0, -0.05, 0);
-  scene.add(rimMesh);
+    const floorGeo = new THREE.CircleGeometry(140, 64);
+    floorGeo.rotateX(-Math.PI / 2);
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: floorTex,
+      roughness: 0.68,
+      metalness: 0.04
+    });
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.position.y = FLOOR_Y;
+    floorMesh.receiveShadow = true;
+    environmentGroup.add(floorMesh);
 
+    // 2. Woven Circular Parlor Rug under Table & Chairs
+    const rugGeo = new THREE.CylinderGeometry(58, 58, 0.25, 64);
+    const rugMat = new THREE.MeshStandardMaterial({
+      color: 0x3b231a,
+      roughness: 0.92,
+      metalness: 0.0
+    });
+    const rugMesh = new THREE.Mesh(rugGeo, rugMat);
+    rugMesh.position.set(0, FLOOR_Y + 0.13, 0);
+    rugMesh.receiveShadow = true;
+    environmentGroup.add(rugMesh);
+
+    const rugBorderGeo = new THREE.RingGeometry(54.5, 57.2, 64);
+    rugBorderGeo.rotateX(-Math.PI / 2);
+    const rugBorderMat = new THREE.MeshStandardMaterial({
+      color: 0xc29256,
+      roughness: 0.85,
+      side: THREE.DoubleSide
+    });
+    const rugBorder = new THREE.Mesh(rugBorderGeo, rugBorderMat);
+    rugBorder.position.set(0, FLOOR_Y + 0.27, 0);
+    environmentGroup.add(rugBorder);
+
+    // 3. 360° Parlor Wainscoting Wall Surround (Background Layer)
+    const lowerWallGeo = new THREE.CylinderGeometry(125, 125, 36, 64, 1, true);
+    const lowerWallMat = new THREE.MeshStandardMaterial({
+      color: 0x261810,
+      roughness: 0.78,
+      metalness: 0.05,
+      side: THREE.BackSide
+    });
+    const lowerWall = new THREE.Mesh(lowerWallGeo, lowerWallMat);
+    lowerWall.position.set(0, FLOOR_Y + 18, 0);
+    environmentGroup.add(lowerWall);
+
+    const chairRailGeo = new THREE.TorusGeometry(124.2, 0.6, 12, 64);
+    chairRailGeo.rotateX(Math.PI / 2);
+    const chairRailMat = new THREE.MeshStandardMaterial({
+      color: 0x4d311e,
+      roughness: 0.55,
+      metalness: 0.1
+    });
+    const chairRail = new THREE.Mesh(chairRailGeo, chairRailMat);
+    chairRail.position.set(0, FLOOR_Y + 36, 0);
+    environmentGroup.add(chairRail);
+
+    // 4. Overhead Parlor Pendant Lamp Shade
+    const cordGeo = new THREE.CylinderGeometry(0.18, 0.18, 30, 12);
+    const brassMat = new THREE.MeshStandardMaterial({
+      color: 0xc88a4b,
+      roughness: 0.28,
+      metalness: 0.75
+    });
+    const cordMesh = new THREE.Mesh(cordGeo, brassMat);
+    cordMesh.position.set(0, 62, 0);
+    environmentGroup.add(cordMesh);
+
+    const shadeGeo = new THREE.ConeGeometry(9.5, 4.5, 32, 1, true);
+    const shadeMat = new THREE.MeshStandardMaterial({
+      color: 0x1d3b2a, // Classic vintage billiard/parlor green-and-brass shade
+      roughness: 0.35,
+      metalness: 0.15,
+      side: THREE.DoubleSide
+    });
+    const shadeMesh = new THREE.Mesh(shadeGeo, shadeMat);
+    shadeMesh.position.set(0, 46.5, 0);
+    environmentGroup.add(shadeMesh);
+
+    const bulbGeo = new THREE.SphereGeometry(1.4, 16, 16);
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfff3d6 });
+    const bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+    bulbMesh.position.set(0, 45.2, 0);
+    environmentGroup.add(bulbMesh);
+
+    // 5. Circular Pedestal Game Table (Top + Turned Column + 4 Splayed Feet)
+    const tableCanvas = window.JengaTextures.createTableCanvas();
+    const tableTex = new THREE.CanvasTexture(tableCanvas);
+    tableTex.anisotropy = 4;
+
+    const tableTopGeo = new THREE.CylinderGeometry(28, 29.2, 2.2, 64);
+    const tableTopMat = new THREE.MeshStandardMaterial({
+      map: tableTex,
+      roughness: 0.42,
+      metalness: 0.04
+    });
+    const tableMesh = new THREE.Mesh(tableTopGeo, tableTopMat);
+    tableMesh.position.set(0, -1.1, 0);
+    tableMesh.receiveShadow = true;
+    tableMesh.castShadow = true;
+    environmentGroup.add(tableMesh);
+
+    // Subtle inlaid brass rim
+    const rimGeo = new THREE.TorusGeometry(28.05, 0.22, 16, 64);
+    rimGeo.rotateX(Math.PI / 2);
+    const rimMesh = new THREE.Mesh(rimGeo, brassMat);
+    rimMesh.position.set(0, -0.05, 0);
+    environmentGroup.add(rimMesh);
+
+    // Table apron & central pedestal column
+    const pedestalMat = new THREE.MeshStandardMaterial({
+      color: 0x362214,
+      roughness: 0.55,
+      metalness: 0.05
+    });
+    const apronGeo = new THREE.CylinderGeometry(23, 21, 2.2, 48);
+    const apronMesh = new THREE.Mesh(apronGeo, pedestalMat);
+    apronMesh.position.set(0, -3.1, 0);
+    environmentGroup.add(apronMesh);
+
+    const columnHeight = Math.abs(FLOOR_Y) - 3.5;
+    const columnGeo = new THREE.CylinderGeometry(3.8, 5.2, columnHeight, 32);
+    const columnMesh = new THREE.Mesh(columnGeo, pedestalMat);
+    columnMesh.position.set(0, FLOOR_Y + columnHeight / 2 + 1.5, 0);
+    columnMesh.castShadow = true;
+    columnMesh.receiveShadow = true;
+    environmentGroup.add(columnMesh);
+
+    // Base plinth & 4 splayed table legs resting on floor
+    const plinthGeo = new THREE.CylinderGeometry(7.2, 8.5, 2.2, 32);
+    const plinthMesh = new THREE.Mesh(plinthGeo, pedestalMat);
+    plinthMesh.position.set(0, FLOOR_Y + 1.1, 0);
+    environmentGroup.add(plinthMesh);
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 2 + Math.PI / 4;
+      const legGeo = new THREE.BoxGeometry(2.4, 2.2, 16);
+      const legMesh = new THREE.Mesh(legGeo, pedestalMat);
+      legMesh.position.set(
+        Math.sin(angle) * 9.5,
+        FLOOR_Y + 1.1,
+        Math.cos(angle) * 9.5
+      );
+      legMesh.rotation.y = angle;
+      legMesh.castShadow = true;
+      legMesh.receiveShadow = true;
+      environmentGroup.add(legMesh);
+    }
+  }
+
+  buildParlorEnvironment();
+
+  // Physics Ground Body for Tabletop
   const groundBody = new CANNON.Body({
     mass: 0,
     material: tableMaterial,
@@ -207,16 +357,205 @@ window.initJengaGame = function () {
   });
   world.addBody(groundBody);
 
-  // Block Materials (4 natural wood variations)
-  const blockCanvases = window.JengaTextures.createBlockCanvases();
-  const blockMaterials = blockCanvases.map((cnv) => {
-    const tex = new THREE.CanvasTexture(cnv);
-    tex.anisotropy = 4;
-    return new THREE.MeshStandardMaterial({
-      map: tex,
-      roughness: 0.62,
+  // ============================================================================
+  // DYNAMIC 3D CHAIRS AROUND THE CIRCULAR TABLE (MATCHING PLAYER COUNT)
+  // ============================================================================
+  const chairsGroup = new THREE.Group();
+  scene.add(chairsGroup);
+  let chairObjects = [];
+
+  /**
+   * Builds a realistic 3D wooden parlor chair with upholstered cushion & curved backrest.
+   */
+  function createSingleChairMesh(playerColorHex) {
+    const chair = new THREE.Group();
+
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x422918,
+      roughness: 0.5,
+      metalness: 0.05
+    });
+
+    const cushionMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(playerColorHex),
+      roughness: 0.65,
       metalness: 0.02
     });
+
+    const brassAccentMat = new THREE.MeshStandardMaterial({
+      color: 0xd49b57,
+      roughness: 0.3,
+      metalness: 0.75
+    });
+
+    const seatY = FLOOR_Y + 14.5;
+    const seatW = 12.5;
+    const seatD = 12.0;
+
+    // 1. Wooden Seat Frame
+    const seatFrameGeo = new THREE.BoxGeometry(seatW, 1.4, seatD);
+    const seatFrame = new THREE.Mesh(seatFrameGeo, frameMat);
+    seatFrame.position.set(0, seatY, 0);
+    seatFrame.castShadow = true;
+    seatFrame.receiveShadow = true;
+    chair.add(seatFrame);
+
+    // 2. Upholstered Cushion (colored per player)
+    const cushionGeo = new THREE.BoxGeometry(seatW - 1.0, 1.3, seatD - 1.0);
+    const cushion = new THREE.Mesh(cushionGeo, cushionMat);
+    cushion.position.set(0, seatY + 1.1, 0);
+    cushion.castShadow = true;
+    cushion.receiveShadow = true;
+    chair.add(cushion);
+
+    // 3. Four Tapered Wooden Legs
+    const legH = seatY - FLOOR_Y;
+    const legGeo = new THREE.CylinderGeometry(0.65, 0.45, legH, 12);
+    const legOffsets = [
+      [-seatW / 2 + 1.1, -seatD / 2 + 1.1],
+      [seatW / 2 - 1.1, -seatD / 2 + 1.1],
+      [-seatW / 2 + 1.1, seatD / 2 - 1.1],
+      [seatW / 2 - 1.1, seatD / 2 - 1.1]
+    ];
+
+    legOffsets.forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(legGeo, frameMat);
+      leg.position.set(lx, FLOOR_Y + legH / 2, lz);
+      leg.castShadow = true;
+      leg.receiveShadow = true;
+      chair.add(leg);
+    });
+
+    // Side stretchers between legs for realism
+    const stretcherGeo = new THREE.CylinderGeometry(0.32, 0.32, seatD - 2.2, 8);
+    stretcherGeo.rotateX(Math.PI / 2);
+    [-seatW / 2 + 1.1, seatW / 2 - 1.1].forEach((lx) => {
+      const st = new THREE.Mesh(stretcherGeo, frameMat);
+      st.position.set(lx, FLOOR_Y + 5.2, 0);
+      chair.add(st);
+    });
+
+    // 4. Backrest Uprights & Slats (at +Z side of chair local space, facing -Z toward table center)
+    const backH = 15.5;
+    const postGeo = new THREE.CylinderGeometry(0.62, 0.58, backH, 12);
+    [-seatW / 2 + 1.2, seatW / 2 - 1.2].forEach((px) => {
+      const post = new THREE.Mesh(postGeo, frameMat);
+      post.position.set(px, seatY + backH / 2, seatD / 2 - 0.9);
+      post.rotation.x = 0.08; // Slight ergonomic recline
+      post.castShadow = true;
+      chair.add(post);
+    });
+
+    // Vertical spindles in backrest
+    const spindleGeo = new THREE.CylinderGeometry(0.28, 0.28, backH - 3.2, 8);
+    [-3.2, -1.1, 1.1, 3.2].forEach((sx) => {
+      const spindle = new THREE.Mesh(spindleGeo, frameMat);
+      spindle.position.set(sx, seatY + backH / 2 - 0.5, seatD / 2 - 0.5);
+      spindle.rotation.x = 0.08;
+      spindle.castShadow = true;
+      chair.add(spindle);
+    });
+
+    // Top Crest Rail
+    const crestGeo = new THREE.BoxGeometry(seatW + 0.6, 2.6, 1.3);
+    const crest = new THREE.Mesh(crestGeo, frameMat);
+    crest.position.set(0, seatY + backH - 0.8, seatD / 2 - 0.2);
+    crest.rotation.x = 0.08;
+    crest.castShadow = true;
+    chair.add(crest);
+
+    // Active-turn brass crest badge on top rail
+    const badgeGeo = new THREE.BoxGeometry(4.2, 0.9, 1.45);
+    const badge = new THREE.Mesh(badgeGeo, brassAccentMat);
+    badge.position.set(0, seatY + backH - 0.8, seatD / 2 - 0.2);
+    badge.rotation.x = 0.08;
+    chair.add(badge);
+
+    return { group: chair, cushion, badge };
+  }
+
+  /**
+   * Spawns and arranges chairs around the circular table matching `state.players.length`.
+   */
+  function updatePlayerChairs() {
+    while (chairsGroup.children.length > 0) {
+      chairsGroup.remove(chairsGroup.children[0]);
+    }
+    chairObjects = [];
+
+    const count = state.players.length;
+    const chairRadius = 40.5; // Placed comfortably around the 28-radius circular table
+
+    for (let i = 0; i < count; i++) {
+      // Distribute chairs evenly around the 360° table
+      const angle = (i * 2 * Math.PI) / count;
+      const player = state.players[i];
+      const chairObj = createSingleChairMesh(player.color);
+
+      const cx = Math.sin(angle) * chairRadius;
+      const cz = Math.cos(angle) * chairRadius;
+      chairObj.group.position.set(cx, 0, cz);
+      // Rotate chair so its front (-Z local) faces inward toward the table center (0,0,0)
+      chairObj.group.rotation.y = angle;
+
+      chairsGroup.add(chairObj.group);
+      chairObjects.push(chairObj);
+    }
+
+    if (elSeatCountBadge) {
+      elSeatCountBadge.textContent = `${count} ${count === 1 ? 'Chair' : 'Chairs'}`;
+    }
+    highlightActivePlayerChair();
+  }
+
+  function highlightActivePlayerChair() {
+    chairObjects.forEach((c, idx) => {
+      const isTurn = idx === state.currentPlayerIdx;
+      // Subtle push-in / active glow for the player whose turn it currently is
+      const count = state.players.length;
+      const angle = (idx * 2 * Math.PI) / count;
+      const radius = isTurn ? 38.2 : 41.5;
+      c.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+      c.cushion.material.emissive.setHex(isTurn ? 0x221406 : 0x000000);
+    });
+  }
+
+  // ============================================================================
+  // 3 REALISTIC WOOD SPECIES MATERIALS (MAPLE, CHERRY OAK, WALNUT)
+  // ============================================================================
+  const woodSpeciesData = window.JengaTextures.createThreeWoodSpecies();
+  const sharedBumpTex = new THREE.CanvasTexture(woodSpeciesData[0].bumpCanvas);
+  sharedBumpTex.anisotropy = 4;
+
+  // Create a 6-face material array for each of the 3 wood species
+  const woodSpeciesMaterials = woodSpeciesData.map((sp) => {
+    const sideTex = new THREE.CanvasTexture(sp.sideCanvas);
+    sideTex.anisotropy = 4;
+
+    const endTex = new THREE.CanvasTexture(sp.endCanvas);
+    endTex.anisotropy = 4;
+
+    const sideMat = new THREE.MeshStandardMaterial({
+      map: sideTex,
+      bumpMap: sharedBumpTex,
+      bumpScale: 0.032,
+      roughness: 0.54,
+      metalness: 0.02
+    });
+
+    const endMat = new THREE.MeshStandardMaterial({
+      map: endTex,
+      bumpMap: sharedBumpTex,
+      bumpScale: 0.04,
+      roughness: 0.68,
+      metalness: 0.01
+    });
+
+    // BoxGeometry face order: +X (long side), -X (long side), +Y (top), -Y (bottom), +Z (short end), -Z (short end)
+    return {
+      name: sp.name,
+      materials: [sideMat, sideMat, sideMat, sideMat, endMat, endMat]
+    };
   });
 
   // Top Placement Ghost Slots (3 interactive slots on the topmost layer)
@@ -227,13 +566,12 @@ window.initJengaGame = function () {
   const ghostMatBase = new THREE.MeshBasicMaterial({
     color: 0xe59838,
     transparent: true,
-    opacity: 0.34,
-    wireframe: false
+    opacity: 0.28
   });
   const ghostMatHover = new THREE.MeshBasicMaterial({
     color: 0x4cd97b,
     transparent: true,
-    opacity: 0.62
+    opacity: 0.52
   });
 
   for (let i = 0; i < 3; i++) {
@@ -253,16 +591,16 @@ window.initJengaGame = function () {
     ghostSlotMeshes.push(slotMesh);
   }
 
-  // Selection outline highlight mesh
+  // Subtle selection outline highlight mesh
   const highlightGeo = new THREE.BoxGeometry(
-    BLOCK_WIDTH + 0.1,
-    BLOCK_HEIGHT + 0.1,
-    BLOCK_LENGTH + 0.1
+    BLOCK_WIDTH + 0.08,
+    BLOCK_HEIGHT + 0.08,
+    BLOCK_LENGTH + 0.08
   );
   const highlightEdges = new THREE.EdgesGeometry(highlightGeo);
   const highlightLine = new THREE.LineSegments(
     highlightEdges,
-    new THREE.LineBasicMaterial({ color: 0x4cd97b, linewidth: 2 })
+    new THREE.LineBasicMaterial({ color: 0x4cd97b, transparent: true, opacity: 0.85 })
   );
   highlightLine.visible = false;
   scene.add(highlightLine);
@@ -274,9 +612,6 @@ window.initJengaGame = function () {
     new CANNON.Vec3(BLOCK_WIDTH / 2, BLOCK_HEIGHT / 2, BLOCK_LENGTH / 2)
   );
 
-  /**
-   * Sync a Cannon.js body's position and quaternion safely to a Three.js mesh.
-   */
   function syncMeshToBody(mesh, body) {
     mesh.position.set(body.position.x, body.position.y, body.position.z);
     mesh.quaternion.set(
@@ -288,7 +623,7 @@ window.initJengaGame = function () {
   }
 
   /**
-   * Build the 54-block 18-story Jenga tower with realistic Loose/Snug/Tight distribution.
+   * Build the 54-block 18-story Jenga tower using the 3 distinct wood colors/species.
    */
   function buildTower(seed = Date.now()) {
     blocks.forEach((b) => {
@@ -299,7 +634,6 @@ window.initJengaGame = function () {
     highlightLine.visible = false;
     hideGhostSlots();
 
-    // Seeded RNG so online rooms share identical loose/tight layout
     let rngState = Math.abs(Math.floor(seed)) % 2147483647;
     if (rngState <= 0) rngState += 2147483646;
     const nextRand = () => {
@@ -314,6 +648,7 @@ window.initJengaGame = function () {
       const isEven = layer % 2 === 0;
       const y = layer * BLOCK_HEIGHT + halfH;
 
+      // Shuffle tensions (loose, medium, tight) per 3-block layer
       const tensions = ['loose', 'medium', 'tight'];
       for (let k = tensions.length - 1; k > 0; k--) {
         const r = Math.floor(nextRand() * (k + 1));
@@ -322,13 +657,23 @@ window.initJengaGame = function () {
         tensions[r] = tmp;
       }
 
+      // Shuffle the 3 wood colors/species (Maple, Cherry Oak, Walnut) so each row showcases all 3 woods
+      const woodOrder = [0, 1, 2];
+      for (let k = woodOrder.length - 1; k > 0; k--) {
+        const r = Math.floor(nextRand() * (k + 1));
+        const tmp = woodOrder[k];
+        woodOrder[k] = woodOrder[r];
+        woodOrder[r] = tmp;
+      }
+
       for (let slot = 0; slot < BLOCKS_PER_LAYER; slot++) {
         const offset = (slot - 1) * (BLOCK_WIDTH + GAP);
         const x = isEven ? offset : 0;
         const z = isEven ? 0 : offset;
 
-        const matIndex = Math.floor(nextRand() * blockMaterials.length);
-        const mesh = new THREE.Mesh(sharedBoxGeo, blockMaterials[matIndex]);
+        const woodIdx = woodOrder[slot];
+        const woodSpec = woodSpeciesMaterials[woodIdx];
+        const mesh = new THREE.Mesh(sharedBoxGeo, woodSpec.materials);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
 
@@ -363,6 +708,7 @@ window.initJengaGame = function () {
           layer,
           slot,
           isEven,
+          woodName: woodSpec.name,
           tension,
           resistance: resistanceMap[tension],
           mesh,
@@ -384,12 +730,10 @@ window.initJengaGame = function () {
     elStabilityBar.style.width = '10%';
     elStabilityText.textContent = 'Solid & Balanced';
     updateBlockInspector(null, false);
+    updatePlayerChairs();
     updateHUD();
   }
 
-  /**
-   * Determine the current top layer and which layers are forbidden by official Jenga rules.
-   */
   function getLayerStatus() {
     const layerCounts = new Map();
     let maxLayer = 0;
@@ -426,15 +770,41 @@ window.initJengaGame = function () {
     return block.layer < status.highestCompletedLayer;
   }
 
-  // Multi-touch & Pointer Tracking for Mobile + Desktop
+  // ============================================================================
+  // FLAWLESS 360° 3D RAY-TO-AXIS CLOSEST POINT BLOCK EXTRACTION
+  // ============================================================================
   const activePointers = new Set();
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  const dragPlane = new THREE.Plane();
-  const dragIntersect = new THREE.Vector3();
-  const dragStartPoint = new THREE.Vector3();
+  const pointerStart = new THREE.Vector2();
   const blockDragStartPos = new THREE.Vector3();
+  const blockGrabWorldPoint = new THREE.Vector3();
+  let grabAxisT0 = 0;
   let isDraggingBlock = false;
+
+  /**
+   * Computes the parameter `t` along the 3D line `L(t) = lineOrigin + t * lineAxis`
+   * that is closest to the current camera ray `R(s) = ray.origin + s * ray.direction`.
+   * Works reliably from all 360° angles without plane-grazing issues.
+   */
+  function getClosestAxisParamToRay(lineOrigin, lineAxis, ray) {
+    const w0 = lineOrigin.clone().sub(ray.origin);
+    const b = lineAxis.dot(ray.direction);
+    const denom = 1.0 - b * b;
+
+    if (denom < 0.06) {
+      // Looking nearly straight down the barrel of the block:
+      // Use vertical/horizontal screen pointer delta to pull toward camera
+      const camToBlock = lineOrigin.clone().sub(camera.position).normalize();
+      const signTowardCam = Math.sign( lineAxis.dot(camToBlock) ) || 1;
+      const screenPull = (pointerStart.y - pointer.y) * 14.0;
+      return grabAxisT0 - signTowardCam * screenPull;
+    }
+
+    const dDotW0 = ray.direction.dot(w0);
+    const uDotW0 = lineAxis.dot(w0);
+    return (uDotW0 * b - dDotW0) / denom;
+  }
 
   function updatePointer(e) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -473,19 +843,18 @@ window.initJengaGame = function () {
       activePointers.add(e.pointerId);
     }
 
-    // If user puts a 2nd finger down on mobile (pinch zoom / 2-finger rotate), immediately hand control to OrbitControls
     if (activePointers.size > 1) {
       cancelActiveBlockDragToOrbit();
       return;
     }
 
-    if (e.button !== undefined && e.button !== 0) return; // Only primary click/touch pulls blocks
+    if (e.button !== undefined && e.button !== 0) return;
     if (state.turnPhase === 'GAMEOVER' || state.turnPhase === 'SETTLING') return;
 
     updatePointer(e);
+    pointerStart.copy(pointer);
     raycaster.setFromCamera(pointer, camera);
 
-    // If in STACKING phase, tapping/clicking a ghost slot places the block on top
     if (state.turnPhase === 'STACKING') {
       const slotHits = raycaster.intersectObjects(ghostSlotMeshes, false);
       if (slotHits.length > 0) {
@@ -495,8 +864,6 @@ window.initJengaGame = function () {
       return;
     }
 
-    // If the user toggled "🔄 360° View" mode on mobile/desktop, 1-finger drag always orbits the camera
-    // while tapping still inspects the block's tension!
     const meshes = blocks.map((b) => b.mesh);
     const intersects = raycaster.intersectObjects(meshes, false);
 
@@ -511,7 +878,6 @@ window.initJengaGame = function () {
       updateBlockInspector(hitBlock, allowed);
 
       if (state.interactionMode === 'orbit') {
-        // Let OrbitControls rotate 360° freely while still showing the block inspector
         window.JengaAudio.playWoodTap(1.1, 0.15);
         return;
       }
@@ -526,14 +892,12 @@ window.initJengaGame = function () {
         return;
       }
 
-      // Begin pulling/nudging this block
       isDraggingBlock = true;
       state.activeBlock = hitBlock;
       state.turnPhase = 'PULLING';
       controls.enabled = false;
       container.className = 'dragging-block';
 
-      // Wake up nearby layers
       blocks.forEach((b) => {
         if (Math.abs(b.layer - hitBlock.layer) <= 2) {
           b.body.wakeUp();
@@ -545,16 +909,18 @@ window.initJengaGame = function () {
         0.3
       );
 
-      // Camera-facing drag plane so dragging works reliably from any 360° camera angle & elevation
-      const camDir = new THREE.Vector3();
-      camera.getWorldDirection(camDir);
-      dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), intersects[0].point);
-      raycaster.ray.intersectPlane(dragPlane, dragStartPoint);
       blockDragStartPos.set(
         hitBlock.body.position.x,
         hitBlock.body.position.y,
         hitBlock.body.position.z
       );
+      blockGrabWorldPoint.copy(intersects[0].point);
+
+      const axis = hitBlock.isEven
+        ? new THREE.Vector3(0, 0, 1)
+        : new THREE.Vector3(1, 0, 0);
+      grabAxisT0 = 0;
+      grabAxisT0 = getClosestAxisParamToRay(blockGrabWorldPoint, axis, raycaster.ray);
 
       updateHUD();
     }
@@ -567,61 +933,54 @@ window.initJengaGame = function () {
     updatePointer(e);
     raycaster.setFromCamera(pointer, camera);
 
-    // Dragging an active block along its 3D channel
     if (isDraggingBlock && state.activeBlock) {
-      if (raycaster.ray.intersectPlane(dragPlane, dragIntersect)) {
-        const b = state.activeBlock;
-        const delta = dragIntersect.clone().sub(dragStartPoint);
+      const b = state.activeBlock;
+      const axis = b.isEven
+        ? new THREE.Vector3(0, 0, 1)
+        : new THREE.Vector3(1, 0, 0);
 
-        // Compute block's horizontal lengthwise axis & cross axis
-        const axis = b.isEven
-          ? new THREE.Vector3(0, 0, 1)
-          : new THREE.Vector3(1, 0, 0);
-        const crossAxis = b.isEven
-          ? new THREE.Vector3(1, 0, 0)
-          : new THREE.Vector3(0, 0, 1);
+      const currentT = getClosestAxisParamToRay(blockGrabWorldPoint, axis, raycaster.ray);
+      const alongDist = currentT - grabAxisT0;
 
-        const alongDist = delta.dot(axis);
-        const sideDist = THREE.MathUtils.clamp(delta.dot(crossAxis), -0.22, 0.22);
+      const damping = 1.0 - b.resistance * 0.42;
+      const effectiveAlong = THREE.MathUtils.clamp(
+        alongDist * damping,
+        -BLOCK_LENGTH * 1.15,
+        BLOCK_LENGTH * 1.15
+      );
 
-        const damping = 1.0 - b.resistance * 0.42;
-        const effectiveAlong = alongDist * damping;
+      const targetPos = blockDragStartPos
+        .clone()
+        .addScaledVector(axis, effectiveAlong);
 
-        const targetPos = blockDragStartPos
-          .clone()
-          .addScaledVector(axis, effectiveAlong)
-          .addScaledVector(crossAxis, sideDist);
+      b.body.wakeUp();
+      b.body.position.x = targetPos.x;
+      b.body.position.z = targetPos.z;
+      b.body.velocity.set(0, 0, 0);
+      b.body.angularVelocity.set(0, 0, 0);
 
-        b.body.wakeUp();
-        b.body.position.x = targetPos.x;
-        b.body.position.z = targetPos.z;
-        b.body.velocity.set(0, 0, 0);
-        b.body.angularVelocity.set(0, 0, 0);
+      if (b.resistance > 0.4 && Math.abs(effectiveAlong) > 0.15) {
+        applyNeighborFrictionTug(b, axis, effectiveAlong);
+      }
 
-        if (b.resistance > 0.4 && Math.abs(effectiveAlong) > 0.15) {
-          applyNeighborFrictionTug(b, axis, effectiveAlong);
-        }
+      b.pullDistance = Math.hypot(
+        b.body.position.x - b.initialPos.x,
+        b.body.position.z - b.initialPos.z
+      );
 
-        b.pullDistance = Math.hypot(
-          b.body.position.x - b.initialPos.x,
-          b.body.position.z - b.initialPos.z
-        );
+      window.JengaAudio.playWoodSlide(b.resistance);
 
-        window.JengaAudio.playWoodSlide(b.resistance);
+      if (b.pullDistance > 1.8 && !state.committedBlock) {
+        state.committedBlock = b;
+        showToast('Committed to this block! Slide it all the way out.');
+      }
 
-        if (b.pullDistance > 1.8 && !state.committedBlock) {
-          state.committedBlock = b;
-          showToast('Committed to this block! Slide it all the way out.');
-        }
-
-        if (b.pullDistance >= BLOCK_LENGTH * 0.88) {
-          completeBlockExtraction(b);
-        }
+      if (b.pullDistance >= BLOCK_LENGTH * 0.88) {
+        completeBlockExtraction(b);
       }
       return;
     }
 
-    // Hovering over top ghost slots during STACKING phase
     if (state.turnPhase === 'STACKING') {
       const hits = raycaster.intersectObjects(ghostSlotMeshes, false);
       ghostSlotMeshes.forEach((m) => (m.material = ghostMatBase));
@@ -634,7 +993,6 @@ window.initJengaGame = function () {
       return;
     }
 
-    // Hovering over tower blocks on desktop
     if (e.pointerType === 'touch') return;
 
     const meshes = blocks.map((b) => b.mesh);
@@ -679,12 +1037,9 @@ window.initJengaGame = function () {
     }
   }
 
-  /**
-   * Simulates wood-on-wood friction when pulling a snug or tight block.
-   */
   function applyNeighborFrictionTug(pulledBlock, axis, alongDist) {
     const sign = Math.sign(alongDist) || 1;
-    const forceMag = (pulledBlock.resistance - 0.3) * 0.028;
+    const forceMag = (pulledBlock.resistance - 0.3) * 0.026;
 
     for (const other of blocks) {
       if (other.id === pulledBlock.id) continue;
@@ -697,9 +1052,6 @@ window.initJengaGame = function () {
     }
   }
 
-  /**
-   * Called once a block is pulled completely free of the tower.
-   */
   function completeBlockExtraction(block) {
     isDraggingBlock = false;
     controls.enabled = true;
@@ -837,6 +1189,7 @@ window.initJengaGame = function () {
     state.activeBlock = null;
     state.committedBlock = null;
     state.turnPhase = 'SELECT';
+    highlightActivePlayerChair();
     updateHUD();
   }
 
@@ -925,7 +1278,7 @@ window.initJengaGame = function () {
   function updateBlockInspector(block, allowed) {
     if (!block) {
       elBlockInspector.innerHTML =
-        'Hover or tap any block below the top completed layer to test how loose or tight it sits.';
+        'Hover or tap any block below the top completed layer to inspect its wood species and tension.';
       elMobileBlockPill.classList.remove('active');
       return;
     }
@@ -957,11 +1310,11 @@ window.initJengaGame = function () {
       block.slot === 1 ? 'Center' : block.slot === 0 ? 'Left' : 'Right';
     elBlockInspector.innerHTML = `<strong>Layer ${
       block.layer + 1
-    } • ${slotName} Block</strong><br/><span class="badge-pill ${badgeClass}">${label}</span>`;
+    } • ${block.woodName} (${slotName})</strong><br/><span class="badge-pill ${badgeClass}">${label}</span>`;
 
-    elMobileBlockPill.innerHTML = `<strong>Layer ${
-      block.layer + 1
-    } (${slotName})</strong> • <span class="badge-pill ${badgeClass}">${label}</span>`;
+    elMobileBlockPill.innerHTML = `<strong>L${block.layer + 1} ${
+      block.woodName
+    }</strong> • <span class="badge-pill ${badgeClass}">${label}</span>`;
     elMobileBlockPill.classList.add('active');
   }
 
@@ -979,8 +1332,8 @@ window.initJengaGame = function () {
       elCoachBadge.textContent = 'STEP 1 • EXTRACT';
       elCoachText.textContent =
         state.interactionMode === 'orbit'
-          ? '360° View Mode active: Drag anywhere to spin around the tower. Tap "🖐️ Pull" when ready to slide a block!'
-          : 'Drag any block below the top completed row to slide it out. Drag background or use 360° controls to see all sides!';
+          ? '360° View Mode active: Drag anywhere to spin around the table & chairs. Tap "🖐️ Pull" to slide a block!'
+          : 'Drag any block below the top completed row along its length. Orbit 360° to see all sides & player chairs!';
     } else if (state.turnPhase === 'PULLING') {
       elTurnPhaseText.textContent = 'Sliding block out...';
       elCoachBadge.textContent = 'PULLING BLOCK';
@@ -995,7 +1348,7 @@ window.initJengaGame = function () {
       elTurnPhaseText.textContent = 'Checking tower stability...';
       elCoachBadge.textContent = 'HOLD BREATH...';
       elCoachText.textContent =
-        'Verifying the tower holds steady before ending turn...';
+        'Verifying the tower holds steady before advancing to the next chair...';
     } else if (state.turnPhase === 'GAMEOVER') {
       elTurnPhaseText.textContent = 'Tower Collapsed!';
       elCoachBadge.textContent = 'GAME OVER';
@@ -1011,7 +1364,7 @@ window.initJengaGame = function () {
       row.innerHTML = `
         <div class="player-row-left">
           <span class="player-Color-pip" style="background:${p.color}"></span>
-          <span>${p.name}</span>
+          <span>🪑 ${p.name}</span>
         </div>
         <span class="player-moves">${p.moves} moves</span>
       `;
@@ -1032,7 +1385,7 @@ window.initJengaGame = function () {
   // 360° Camera Orbit Controls & Compass Synchronization
   function getCameraAzimuthDeg() {
     const offset = camera.position.clone().sub(controls.target);
-    let rad = Math.atan2(offset.x, offset.z); // -PI to PI
+    let rad = Math.atan2(offset.x, offset.z);
     let deg = Math.round(THREE.MathUtils.radToDeg(rad));
     if (deg < 0) deg += 360;
     return deg % 360;
@@ -1115,7 +1468,7 @@ window.initJengaGame = function () {
       const dist = getIdealCameraDistance();
       animateCameraTo(
         new THREE.Vector3(dist * Math.sin(rad), 20, dist * Math.cos(rad)),
-        new THREE.Vector3(0, 13.5, 0)
+        new THREE.Vector3(0, 13.0, 0)
       );
     }
   });
@@ -1138,7 +1491,6 @@ window.initJengaGame = function () {
     updateHUD();
   });
 
-  // Slot picker buttons in bottom bar
   document.querySelectorAll('[data-slot]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const slotIndex = parseInt(btn.getAttribute('data-slot'), 10);
@@ -1146,7 +1498,6 @@ window.initJengaGame = function () {
     });
   });
 
-  // Top Bar Controls
   document.getElementById('btn-sound').addEventListener('click', () => {
     const on = window.JengaAudio.toggle();
     document.getElementById('sound-icon').textContent = on ? '🔊' : '🔇';
@@ -1179,7 +1530,7 @@ window.initJengaGame = function () {
     document.getElementById('btn-reset').click();
   });
 
-  // No-Sign-In Mode & Room Modal Setup
+  // Players & Chairs Modal Setup (1 to 4 Players)
   const lobbyModal = document.getElementById('lobby-modal');
   document.getElementById('btn-mode').addEventListener('click', () => {
     lobbyModal.classList.add('open');
@@ -1211,11 +1562,14 @@ window.initJengaGame = function () {
     const p1 = document.getElementById('input-p1').value.trim() || 'Player 1';
     const p2 = document.getElementById('input-p2').value.trim();
     const p3 = document.getElementById('input-p3').value.trim();
+    const p4Input = document.getElementById('input-p4');
+    const p4 = p4Input ? p4Input.value.trim() : '';
 
-    const colors = ['#e59838', '#4cd97b', '#5ca8ff', '#ff6b9d'];
+    const colors = ['#e59838', '#4cd97b', '#5ca8ff', '#e066ff'];
     const names = [p1];
     if (p2) names.push(p2);
     if (p3) names.push(p3);
+    if (p4) names.push(p4);
 
     state.players = names.map((name, i) => ({
       name,
@@ -1226,7 +1580,11 @@ window.initJengaGame = function () {
     state.blocksMovedTotal = 0;
     buildTower();
     lobbyModal.classList.remove('open');
-    showToast(`Started match: ${state.players.map((p) => p.name).join(' vs ')}!`);
+    showToast(
+      `Seated ${state.players.length} ${
+        state.players.length === 1 ? 'player' : 'players'
+      } around the table!`
+    );
   });
 
   // Instant Room Code Multiplayer (BroadcastChannel + PeerJS WebRTC)
@@ -1309,7 +1667,7 @@ window.initJengaGame = function () {
     if (msg.type === 'PLAYER_JOINED' && state.isHost) {
       state.players[1].name = msg.name;
       updateHUD();
-      showToast(`${msg.name} joined the room!`);
+      showToast(`${msg.name} took a seat at the table!`);
       lobbyModal.classList.remove('open');
     } else if (msg.type === 'MOVE_COMPLETE') {
       const block = blocks.find((b) => b.id === msg.blockId);
@@ -1366,7 +1724,7 @@ window.initJengaGame = function () {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // Build Initial Tower
+  // Build Initial Tower & Chairs
   buildTower();
 
   // Main Physics & Render Loop

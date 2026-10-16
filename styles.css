@@ -30,9 +30,51 @@ html, body {
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
-  background: radial-gradient(circle at 50% 35%, #2b221b 0%, #120e0b 100%);
+  background: #140f0b;
   font-family: var(--font-sans);
   color: var(--text-main);
+}
+
+.background-ambient-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(235, 172, 95, 0.22) 0%, transparent 55%),
+    radial-gradient(circle at 50% 55%, #2a1d14 0%, #160f0a 65%, #0c0805 100%);
+}
+
+.bg-vignette {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.78);
+}
+
+.wood-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.wood-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wood-swatch i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
 }
 
 #canvas-container {

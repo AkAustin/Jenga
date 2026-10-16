@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>JENGA Online — No Sign-In 3D Physics Edition</title>
+  <title>JENGA 360° Online — Realistic 3D Wood &amp; Parlor Edition</title>
   <link rel="stylesheet" href="styles.css" />
   <script type="importmap">
     {
@@ -16,6 +16,12 @@
   </script>
 </head>
 <body>
+  <!-- Layered Ambient Background Layer -->
+  <div class="background-ambient-layer" aria-hidden="true">
+    <div class="bg-glow-top"></div>
+    <div class="bg-vignette"></div>
+  </div>
+
   <!-- 3D WebGL Canvas Container -->
   <div id="canvas-container"></div>
 
@@ -25,7 +31,7 @@
       <div class="brand-logo">J</div>
       <div class="brand-title">
         <h1>Jenga 360°</h1>
-        <p>No Sign-In • 54-Block Physics</p>
+        <p>No Sign-In • Parlor Edition</p>
       </div>
     </div>
 
@@ -51,8 +57,8 @@
     </div>
 
     <div class="hud-actions">
-      <button id="btn-mode" class="btn btn-primary" title="Switch Players or Create Online Room">
-        👥 <span class="btn-label">Players / Room</span>
+      <button id="btn-mode" class="btn btn-primary" title="Switch Players (Spawns Chairs Around Table) or Create Online Room">
+        🪑 <span class="btn-label">Players &amp; Chairs</span>
       </button>
       <button id="btn-rules" class="btn" title="Official Jenga Rules">
         📜 <span class="btn-label">Rules</span>
@@ -69,12 +75,12 @@
   <!-- Mobile Floating Block Inspector Pill -->
   <div id="mobile-block-pill" class="mobile-block-pill"></div>
 
-  <!-- Left Panel: Players & Live Block Tension / Stability Inspector -->
+  <!-- Left Panel: Players (Chairs) & Live Block Tension / 3-Wood Legend -->
   <aside class="side-panel-left">
     <div class="panel-card">
       <h3>
-        <span>Table Players</span>
-        <span style="font-size:10px; color:#e59838;">No Sign-In</span>
+        <span>Seated at Table</span>
+        <span id="seat-count-badge" style="font-size:10px; color:#e59838;">2 Chairs</span>
       </h3>
       <div id="player-list" class="player-list"></div>
     </div>
@@ -88,7 +94,12 @@
         <div id="stability-bar" class="meter-bar-fill"></div>
       </div>
       <div id="block-inspector" class="block-inspector">
-        Hover or tap any block below the top completed layer to test how loose or tight it sits.
+        Hover or tap any block below the top completed layer to inspect its wood species and tension.
+      </div>
+      <div class="wood-legend">
+        <span class="wood-swatch"><i style="background:#e5cca4"></i>Maple</span>
+        <span class="wood-swatch"><i style="background:#c98349"></i>Cherry Oak</span>
+        <span class="wood-swatch"><i style="background:#6e4930"></i>Walnut</span>
       </div>
     </div>
   </aside>
@@ -122,7 +133,7 @@
       <div class="action-coach">
         <span id="coach-badge" class="coach-step-badge">STEP 1 • EXTRACT</span>
         <span id="coach-text" class="coach-text">
-          Drag any block below the top completed row to slide it out. Drag background or use 360° controls to see all sides!
+          Drag any block below the top completed row along its length. Orbit 360° to see all sides &amp; player chairs!
         </span>
         <div id="slot-picker" class="slot-picker">
           <button class="btn btn-primary" data-slot="0">Left Slot</button>
@@ -136,33 +147,37 @@
   <!-- Players / Online Room Modal (Zero Sign-In) -->
   <div id="lobby-modal" class="modal-backdrop">
     <div class="modal-card">
-      <h2>Play Jenga — No Sign-In Required</h2>
+      <h2>Table Seating &amp; Game Mode</h2>
       <p class="subtitle">
-        Jump right in with local Pass &amp; Play, Solo Tower Challenge, or create an instant Room Code to play across tabs/devices.
+        Chairs around the circular table automatically appear to match the number of active players (1 to 4 players, no sign-in required).
       </p>
 
       <div class="mode-tabs">
-        <div class="mode-tab active" data-mode="pass">🛋️ Pass &amp; Play / Solo</div>
+        <div class="mode-tab active" data-mode="pass">🪑 Table Players (1–4)</div>
         <div class="mode-tab" data-mode="online">🌐 Instant Room Code</div>
       </div>
 
       <!-- Pass & Play / Solo Section -->
       <div id="mode-section-pass">
         <div class="form-group">
-          <label>Player 1 Nickname</label>
+          <label>Chair 1 — Player 1 Nickname</label>
           <input id="input-p1" class="form-input" type="text" value="Player 1" placeholder="Enter nickname..." />
         </div>
         <div class="form-group">
-          <label>Player 2 Nickname (Leave blank for Solo Mode)</label>
-          <input id="input-p2" class="form-input" type="text" value="Player 2" placeholder="Leave blank for Solo Challenge" />
+          <label>Chair 2 — Player 2 Nickname (Leave blank for 1-Chair Solo Mode)</label>
+          <input id="input-p2" class="form-input" type="text" value="Player 2" placeholder="Leave blank for 1-Player Solo" />
         </div>
         <div class="form-group">
-          <label>Player 3 Nickname (Optional)</label>
-          <input id="input-p3" class="form-input" type="text" value="" placeholder="Optional 3rd player..." />
+          <label>Chair 3 — Player 3 Nickname (Optional)</label>
+          <input id="input-p3" class="form-input" type="text" value="" placeholder="Add 3rd player &amp; chair..." />
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+        <div class="form-group">
+          <label>Chair 4 — Player 4 Nickname (Optional)</label>
+          <input id="input-p4" class="form-input" type="text" value="" placeholder="Add 4th player &amp; chair..." />
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
           <button id="btn-close-lobby" class="btn">Cancel</button>
-          <button id="btn-start-local" class="btn btn-primary">Start Match</button>
+          <button id="btn-start-local" class="btn btn-primary">Update Table &amp; Start</button>
         </div>
       </div>
 
@@ -202,15 +217,15 @@
   <div id="rules-modal" class="modal-backdrop">
     <div class="modal-card">
       <h2>Official Jenga Rules &amp; 360° Controls</h2>
-      <p class="subtitle">Authentic 54-block hardwood tower dimensions (7.5 × 2.5 × 1.5 ratio).</p>
+      <p class="subtitle">Authentic 54-block timber tower in 3 wood species (Maple, Cherry Oak, Walnut).</p>
       <ul class="rules-list">
         <li>
           <span class="rule-num">1</span>
-          <div><strong>360° All-Around Inspection:</strong> Drag the background, use two fingers on mobile, or slide the bottom <strong>360° Turntable Slider / ↺ ↻ buttons</strong> to inspect all 4 sides of the tower!</div>
+          <div><strong>360° Parlor Table &amp; Player Chairs:</strong> Drag the background, use two fingers on mobile, or slide the bottom <strong>360° Turntable Slider</strong> to inspect all 4 sides of the tower and the chairs around the table.</div>
         </li>
         <li>
           <span class="rule-num">2</span>
-          <div><strong>Probing for Loose Blocks:</strong> Each row has loose, snug, and tight load-bearing blocks. Tap or hover a block to check its tension!</div>
+          <div><strong>3 Wood Colors &amp; Block Tension:</strong> Blocks are crafted from <strong>Natural Maple</strong>, <strong>Honey Cherry Oak</strong>, and <strong>American Walnut</strong>. Tap or hover a block to check whether it sits Loose, Snug, or Tight!</div>
         </li>
         <li>
           <span class="rule-num">3</span>
@@ -218,7 +233,7 @@
         </li>
         <li>
           <span class="rule-num">4</span>
-          <div><strong>Stacking &amp; Stability Check:</strong> Once pulled out, click one of the 3 glowing perpendicular slots on top. The tower must remain standing for 1.1 seconds to complete your turn!</div>
+          <div><strong>Stacking &amp; Stability Check:</strong> Once pulled out, tap one of the 3 glowing perpendicular slots on top. The tower must remain standing for 1.1 seconds to complete your turn!</div>
         </li>
       </ul>
       <div style="display:flex; justify-content:flex-end;">
