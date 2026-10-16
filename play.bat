@@ -1,0 +1,3 @@
+@echo off
+echo Launching JENGA Online (No Sign-In 3D Edition)...
+start "" "%~dp0index.html"

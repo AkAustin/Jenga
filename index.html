@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>JENGA Online — No Sign-In 3D Physics Edition</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://esm.sh/three@0.160.0",
+        "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/",
+        "cannon-es": "https://esm.sh/cannon-es@0.20.0"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- 3D WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Top HUD Bar -->
+  <header class="hud-top">
+    <div class="brand-card">
+      <div class="brand-logo">J</div>
+      <div class="brand-title">
+        <h1>Jenga 360°</h1>
+        <p>No Sign-In • 54-Block Physics</p>
+      </div>
+    </div>
+
+    <div class="turn-banner">
+      <div class="player-badge">
+        <span id="player-dot" class="player-dot"></span>
+        <div class="turn-info">
+          <span id="turn-player-name" class="turn-player-name">Player 1's Turn</span>
+          <span id="turn-phase-text" class="turn-phase-text">Step 1: Pull a loose block</span>
+        </div>
+      </div>
+
+      <div class="tower-stats">
+        <div class="stat-item">
+          <div id="stat-height" class="stat-value">18</div>
+          <div class="stat-label">Stories</div>
+        </div>
+        <div class="stat-item">
+          <div id="stat-moves" class="stat-value">0</div>
+          <div class="stat-label">Moved</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud-actions">
+      <button id="btn-mode" class="btn btn-primary" title="Switch Players or Create Online Room">
+        👥 <span class="btn-label">Players / Room</span>
+      </button>
+      <button id="btn-rules" class="btn" title="Official Jenga Rules">
+        📜 <span class="btn-label">Rules</span>
+      </button>
+      <button id="btn-sound" class="btn" title="Toggle Wood Audio">
+        <span id="sound-icon">🔊</span> <span id="sound-label" class="btn-label">Sound: ON</span>
+      </button>
+      <button id="btn-reset" class="btn btn-danger" title="Rebuild 54-Block Tower">
+        🔄 <span class="btn-label">Reset</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile Floating Block Inspector Pill -->
+  <div id="mobile-block-pill" class="mobile-block-pill"></div>
+
+  <!-- Left Panel: Players & Live Block Tension / Stability Inspector -->
+  <aside class="side-panel-left">
+    <div class="panel-card">
+      <h3>
+        <span>Table Players</span>
+        <span style="font-size:10px; color:#e59838;">No Sign-In</span>
+      </h3>
+      <div id="player-list" class="player-list"></div>
+    </div>
+
+    <div class="panel-card">
+      <h3>
+        <span>Tower Stability</span>
+        <span id="stability-text" style="color:#4cd97b; font-weight:700;">Solid &amp; Balanced</span>
+      </h3>
+      <div class="meter-bar-bg">
+        <div id="stability-bar" class="meter-bar-fill"></div>
+      </div>
+      <div id="block-inspector" class="block-inspector">
+        Hover or tap any block below the top completed layer to test how loose or tight it sits.
+      </div>
+    </div>
+  </aside>
+
+  <!-- Toast Notification Area -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Bottom HUD: 360° Turntable Controls, Touch Mode Switch & Turn Coach -->
+  <footer class="hud-bottom">
+    <div class="bottom-row-main">
+      <!-- 360° Camera Turntable Controls -->
+      <div class="orbit-360-panel">
+        <button id="cam-rot-left" class="btn" title="Rotate 45° Left around Tower">↺ 45°</button>
+
+        <div class="orbit-slider-wrap" title="Drag to spin 360° around all 4 sides of the tower">
+          <input id="orbit-slider" class="orbit-slider" type="range" min="0" max="360" value="45" />
+          <span id="compass-readout" class="compass-readout">45° NE</span>
+        </div>
+
+        <button id="cam-rot-right" class="btn" title="Rotate 45° Right around Tower">↻ 45°</button>
+        <button id="cam-top" class="btn" title="Toggle Top-Down / Eye-Level View">⬆️ Top</button>
+
+        <!-- Touch Mode Switch (Especially helpful on Mobile/Tablet) -->
+        <div class="touch-mode-toggle" title="Switch 1-finger action between Pulling Blocks and 360° Camera Orbit">
+          <button id="mode-btn-pull" class="touch-mode-btn active">🖐️ Pull</button>
+          <button id="mode-btn-orbit" class="touch-mode-btn">🔄 360° View</button>
+        </div>
+      </div>
+
+      <!-- Contextual Step Coach & Top Slot Picker -->
+      <div class="action-coach">
+        <span id="coach-badge" class="coach-step-badge">STEP 1 • EXTRACT</span>
+        <span id="coach-text" class="coach-text">
+          Drag any block below the top completed row to slide it out. Drag background or use 360° controls to see all sides!
+        </span>
+        <div id="slot-picker" class="slot-picker">
+          <button class="btn btn-primary" data-slot="0">Left Slot</button>
+          <button class="btn btn-primary" data-slot="1">Center Slot</button>
+          <button class="btn btn-primary" data-slot="2">Right Slot</button>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Players / Online Room Modal (Zero Sign-In) -->
+  <div id="lobby-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2>Play Jenga — No Sign-In Required</h2>
+      <p class="subtitle">
+        Jump right in with local Pass &amp; Play, Solo Tower Challenge, or create an instant Room Code to play across tabs/devices.
+      </p>
+
+      <div class="mode-tabs">
+        <div class="mode-tab active" data-mode="pass">🛋️ Pass &amp; Play / Solo</div>
+        <div class="mode-tab" data-mode="online">🌐 Instant Room Code</div>
+      </div>
+
+      <!-- Pass & Play / Solo Section -->
+      <div id="mode-section-pass">
+        <div class="form-group">
+          <label>Player 1 Nickname</label>
+          <input id="input-p1" class="form-input" type="text" value="Player 1" placeholder="Enter nickname..." />
+        </div>
+        <div class="form-group">
+          <label>Player 2 Nickname (Leave blank for Solo Mode)</label>
+          <input id="input-p2" class="form-input" type="text" value="Player 2" placeholder="Leave blank for Solo Challenge" />
+        </div>
+        <div class="form-group">
+          <label>Player 3 Nickname (Optional)</label>
+          <input id="input-p3" class="form-input" type="text" value="" placeholder="Optional 3rd player..." />
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+          <button id="btn-close-lobby" class="btn">Cancel</button>
+          <button id="btn-start-local" class="btn btn-primary">Start Match</button>
+        </div>
+      </div>
+
+      <!-- Online Room Code Section -->
+      <div id="mode-section-online" style="display:none;">
+        <div class="form-group">
+          <label>Your Guest Nickname (No Account Needed)</label>
+          <input id="input-online-name" class="form-input" type="text" value="SteadyHand" />
+        </div>
+
+        <div style="display:flex; gap:10px; margin-bottom:14px;">
+          <button id="btn-create-room" class="btn btn-primary" style="flex:1; justify-content:center;">
+            ✨ Create Room Code
+          </button>
+        </div>
+
+        <div id="active-room-display" class="room-code-box" style="display:none;">
+          <div>
+            <div style="font-size:11px; color:#bfb09e;">SHARE ROOM CODE:</div>
+            <div id="room-code-value" class="room-code-text">------</div>
+          </div>
+          <span style="font-size:12px; color:#4cd97b;">Waiting for opponent...</span>
+        </div>
+
+        <div class="form-group" style="margin-top:14px;">
+          <label>Or Join Existing Room Code</label>
+          <div style="display:flex; gap:8px;">
+            <input id="input-room-code" class="form-input" type="text" maxlength="6" placeholder="e.g. JNG42X" style="text-transform:uppercase;" />
+            <button id="btn-join-room" class="btn btn-primary">Join</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Official Jenga Rules Modal -->
+  <div id="rules-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2>Official Jenga Rules &amp; 360° Controls</h2>
+      <p class="subtitle">Authentic 54-block hardwood tower dimensions (7.5 × 2.5 × 1.5 ratio).</p>
+      <ul class="rules-list">
+        <li>
+          <span class="rule-num">1</span>
+          <div><strong>360° All-Around Inspection:</strong> Drag the background, use two fingers on mobile, or slide the bottom <strong>360° Turntable Slider / ↺ ↻ buttons</strong> to inspect all 4 sides of the tower!</div>
+        </li>
+        <li>
+          <span class="rule-num">2</span>
+          <div><strong>Probing for Loose Blocks:</strong> Each row has loose, snug, and tight load-bearing blocks. Tap or hover a block to check its tension!</div>
+        </li>
+        <li>
+          <span class="rule-num">3</span>
+          <div><strong>Below the Top Completed Layer:</strong> You may only extract blocks from <em>below</em> the highest completed 3-block story.</div>
+        </li>
+        <li>
+          <span class="rule-num">4</span>
+          <div><strong>Stacking &amp; Stability Check:</strong> Once pulled out, click one of the 3 glowing perpendicular slots on top. The tower must remain standing for 1.1 seconds to complete your turn!</div>
+        </li>
+      </ul>
+      <div style="display:flex; justify-content:flex-end;">
+        <button id="btn-close-rules" class="btn btn-primary">Got It, Let's Play!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div id="gameover-modal" class="modal-backdrop">
+    <div class="modal-card" style="text-align:center;">
+      <div style="font-size:46px; margin-bottom:8px;">💥🪵</div>
+      <h2 id="gameover-title">Tower Collapsed!</h2>
+      <p id="gameover-desc" class="subtitle" style="margin-top:8px; font-size:14px;"></p>
+      <div style="display:flex; justify-content:center; gap:12px; margin-top:20px;">
+        <button id="btn-play-again" class="btn btn-primary">🔄 Restack &amp; Play Again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PeerJS for zero-sign-in WebRTC online rooms + classic scripts -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/game.js"></script>
+
+  <!-- Bootstrap Three.js + Cannon-es from CDN and start game -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import * as CANNON from 'cannon-es';
+
+    window.THREE = THREE;
+    window.OrbitControls = OrbitControls;
+    window.CANNON = CANNON;
+
+    window.initJengaGame();
+  </script>
+</body>
+</html>
