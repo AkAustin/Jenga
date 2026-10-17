@@ -57,20 +57,20 @@
     </div>
 
     <div class="hud-actions">
-      <button id="btn-mode" class="btn btn-primary" title="Switch Players (Spawns Chairs Around Table) or Create Online Room">
-        <span class="btn-label">Players &amp; Seating</span>
+      <button id="btn-mode" class="btn btn-primary" aria-label="Players and Seating" title="Switch Players (Spawns Chairs Around Table) or Create Online Room">
+        <span aria-hidden="true">⊞</span> <span class="btn-label">Players</span>
       </button>
-      <button id="btn-theme" class="btn" title="Toggle between Night Parlor and Day Mode">
-        <span id="theme-icon">◐</span> <span id="theme-label" class="btn-label">Night</span>
+      <button id="btn-theme" class="btn" aria-label="Toggle Night and Day Mode" title="Toggle between Night Parlor and Day Mode">
+        <span id="theme-icon" aria-hidden="true">◐</span> <span id="theme-label" class="btn-label">Night</span>
       </button>
-      <button id="btn-rules" class="btn" title="Official Jenga Rules">
-        <span class="btn-label">Rules</span>
+      <button id="btn-rules" class="btn" aria-label="Official Jenga Rules" title="Official Jenga Rules">
+        <span aria-hidden="true">?</span> <span class="btn-label">Rules</span>
       </button>
-      <button id="btn-sound" class="btn" title="Toggle Wood Audio">
-        <span id="sound-icon">♪</span> <span id="sound-label" class="btn-label">Audio: ON</span>
+      <button id="btn-sound" class="btn" aria-label="Toggle Audio" title="Toggle Collapse Laughter &amp; Victory Audio">
+        <span id="sound-icon" aria-hidden="true">♪</span> <span id="sound-label" class="btn-label">Audio: ON</span>
       </button>
-      <button id="btn-reset" class="btn btn-danger" title="Rebuild 54-Block Tower">
-        <span class="btn-label">Reset</span>
+      <button id="btn-reset" class="btn btn-danger" aria-label="Reset Tower" title="Rebuild 54-Block Tower">
+        <span aria-hidden="true">↻</span> <span class="btn-label">Reset</span>
       </button>
     </div>
   </header>
@@ -219,12 +219,12 @@
           </button>
         </div>
 
-        <div id="active-room-display" class="room-code-box" style="display:none;">
+        <div id="active-room-display" class="room-code-box" style="display:none;" title="Click to copy Room Code to clipboard">
           <div>
-            <div style="font-size:11px; color:#bfb09e;">SHARE ROOM CODE:</div>
+            <div style="font-size:11px; color:#bfb09e;">SHARE ROOM CODE (CLICK TO COPY):</div>
             <div id="room-code-value" class="room-code-text">------</div>
           </div>
-          <span style="font-size:12px; color:#c8a878;">Waiting for opponent...</span>
+          <span id="room-status-text" style="font-size:12px; color:#c8a878;">Waiting for opponent...</span>
         </div>
 
         <div class="form-group" style="margin-top:14px;">

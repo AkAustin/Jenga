@@ -8,6 +8,8 @@ class SoundEngine {
     this.ctx = null;
     this.enabled = true;
     this.lastSlideTime = 0;
+    this.lastOhTime = 0;
+    this.activeTimers = [];
   }
 
   init() {
@@ -22,16 +24,37 @@ class SoundEngine {
     }
   }
 
+  scheduleTimer(fn, delayMs) {
+    const id = setTimeout(() => {
+      this.activeTimers = this.activeTimers.filter((t) => t !== id);
+      fn();
+    }, delayMs);
+    this.activeTimers.push(id);
+    return id;
+  }
+
+  stopAll() {
+    while (this.activeTimers.length > 0) {
+      clearTimeout(this.activeTimers.pop());
+    }
+    this.lastOhTime = 0;
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
+  }
+
   toggle() {
     this.enabled = !this.enabled;
-    if (!this.enabled && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    if (!this.enabled) {
+      this.stopAll();
     }
     return this.enabled;
   }
 
   /**
-   * Short wooden knock when selecting, probing, or nudging a block.
+   * Short wooden knock used during tower collapse impacts.
    */
   playWoodTap(pitchFactor = 1.0, volume = 0.25) {
     if (!this.enabled) return;
@@ -65,7 +88,7 @@ class SoundEngine {
   }
 
   /**
-   * Subtle wood-on-wood friction scrape while pulling a block.
+   * Subtle wood-on-wood friction scrape.
    */
   playWoodSlide(intensity = 0.4) {
     if (!this.enabled) return;
@@ -105,7 +128,7 @@ class SoundEngine {
   }
 
   /**
-   * Solid wooden thud when placing a block on top of the tower.
+   * Solid wooden thud.
    */
   playBlockPlace() {
     if (!this.enabled) return;
@@ -113,11 +136,11 @@ class SoundEngine {
     if (!this.ctx) return;
 
     this.playWoodTap(0.78, 0.42);
-    setTimeout(() => this.playWoodTap(1.12, 0.22), 45);
+    this.scheduleTimer(() => this.playWoodTap(1.12, 0.22), 45);
   }
 
   /**
-   * Pleasant chime when a turn completes safely.
+   * Pleasant chime.
    */
   playTurnSuccess() {
     if (!this.enabled) return;
@@ -169,7 +192,7 @@ class SoundEngine {
     laughVoices.forEach((v) => {
       for (let s = 0; s < v.syllables; s++) {
         const burstDelay = v.delayMs + s * v.stepMs + Math.random() * 18;
-        setTimeout(() => {
+        this.scheduleTimer(() => {
           if (!this.ctx || !this.enabled) return;
           const now = this.ctx.currentTime;
           const sylDur = 0.125;
@@ -320,7 +343,7 @@ class SoundEngine {
 
     // 3. Rhythmic Party Claps
     for (let c = 0; c < 10; c++) {
-      setTimeout(() => {
+      this.scheduleTimer(() => {
         if (!this.ctx || !this.enabled) return;
         const now = this.ctx.currentTime;
         const bufLen = Math.floor(this.ctx.sampleRate * 0.04);
@@ -359,20 +382,20 @@ class SoundEngine {
   }
 
   /**
-   * Multi-block clatter + stretched "Ohhhhhhhhhhhhhhh!" vocal groan as the tower falls and collapses.
+   * Multi-block clatter + contagious laughter as the tower falls and collapses.
    */
   playTowerCollapse() {
     if (!this.enabled) return;
     this.init();
     if (!this.ctx) return;
 
-    // Stretched "Ohhhhhhhhhhhhhhh!" reaction spanning the fall and collapse
+    // Contagious laughter reaction spanning the fall and collapse
     this.playBreakOh(2.35);
 
     // 28 staggered hardwood block impacts spanning ~2.1 seconds as the tower topples and settles
     for (let i = 0; i < 28; i++) {
       const delay = i * 68 + Math.random() * 55;
-      setTimeout(() => {
+      this.scheduleTimer(() => {
         const pitch = 0.62 + Math.random() * 0.88;
         const vol = Math.max(0.06, 0.4 - i * 0.012);
         this.playWoodTap(pitch, vol);

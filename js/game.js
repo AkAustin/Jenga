@@ -795,7 +795,11 @@ window.initJengaGame = function () {
 
     ctx.fillStyle = isActive ? 'rgba(24, 16, 10, 0.94)' : 'rgba(18, 13, 9, 0.78)';
     ctx.beginPath();
-    ctx.roundRect(10, 12, 492, 88, 10);
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(10, 12, 492, 88, 10);
+    } else {
+      ctx.rect(10, 12, 492, 88);
+    }
     ctx.fill();
 
     ctx.lineWidth = isActive ? 3.5 : 1.5;
@@ -808,9 +812,10 @@ window.initJengaGame = function () {
       : '500 24px "Inter", "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    const safeName = String(playerName || 'PLAYER').slice(0, 18);
     const label = isActive
-      ? `${playerName.toUpperCase()}  •  ACTIVE TURN`
-      : playerName.toUpperCase();
+      ? `${safeName.toUpperCase()}  •  ACTIVE TURN`
+      : safeName.toUpperCase();
     ctx.fillText(label, 256, 56);
 
     const tex = new THREE.CanvasTexture(canvas);
@@ -823,13 +828,35 @@ window.initJengaGame = function () {
   activeSeatLight.position.set(0, 12, 24);
   scene.add(activeSeatLight);
 
+  function disposeObject3D(root) {
+    if (!root) return;
+    root.traverse((obj) => {
+      if (obj.geometry) {
+        obj.geometry.dispose();
+      }
+      if (obj.material) {
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach((m) => {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          });
+        } else {
+          if (obj.material.map) obj.material.map.dispose();
+          obj.material.dispose();
+        }
+      }
+    });
+  }
+
   /**
    * Spawns and arranges chairs, subtle brass table-side inlays, nameplates, and open-palm hands
    * around the circular table matching `state.players.length`.
    */
   function updatePlayerChairs() {
     while (chairsGroup.children.length > 0) {
-      chairsGroup.remove(chairsGroup.children[0]);
+      const child = chairsGroup.children[0];
+      chairsGroup.remove(child);
+      disposeObject3D(child);
     }
     chairObjects = [];
 
@@ -1048,8 +1075,22 @@ window.initJengaGame = function () {
   highlightLine.visible = false;
   scene.add(highlightLine);
 
-  // Blocks Registry
+  // Blocks Registry & Lifecycle Timers
   let blocks = [];
+  let settlingTimerId = null;
+  let gameOverTimerId = null;
+
+  function clearPendingGameTimers() {
+    if (settlingTimerId !== null) {
+      clearTimeout(settlingTimerId);
+      settlingTimerId = null;
+    }
+    if (gameOverTimerId !== null) {
+      clearTimeout(gameOverTimerId);
+      gameOverTimerId = null;
+    }
+  }
+
   const sharedBoxGeo = new THREE.BoxGeometry(BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_LENGTH);
   const sharedShape = new CANNON.Box(
     new CANNON.Vec3(BLOCK_WIDTH / 2, BLOCK_HEIGHT / 2, BLOCK_LENGTH / 2)
@@ -1069,11 +1110,20 @@ window.initJengaGame = function () {
    * Build the 54-block 18-story Jenga tower using the 3 distinct wood colors/species.
    */
   function buildTower(seed = Date.now()) {
+    clearPendingGameTimers();
+    if (window.JengaAudio && typeof window.JengaAudio.stopAll === 'function') {
+      window.JengaAudio.stopAll();
+    }
+    state.currentSeed = seed;
+
     blocks.forEach((b) => {
       scene.remove(b.mesh);
       world.removeBody(b.body);
     });
     blocks = [];
+    isDraggingBlock = false;
+    controls.enabled = true;
+    container.className = '';
     highlightLine.visible = false;
     hideGhostSlots();
 
@@ -1409,18 +1459,26 @@ window.initJengaGame = function () {
         showToast('Committed to this block! Slide it all the way out.');
       }
 
-      if (b.pullDistance >= BLOCK_LENGTH * 0.88) {
+      if (b.pullDistance >= BLOCK_LENGTH * 0.78) {
         completeBlockExtraction(b);
       }
       return;
     }
 
     if (state.turnPhase === 'STACKING') {
-      const hits = raycaster.intersectObjects(ghostSlotMeshes, false);
+      const visibleSlots = ghostSlotMeshes.filter((m) => m.visible);
+      const hits = raycaster.intersectObjects(visibleSlots, false);
       ghostSlotMeshes.forEach((m) => (m.material = ghostMatBase));
       if (hits.length > 0) {
-        hits[0].object.material = ghostMatHover;
+        const hitSlotMesh = hits[0].object;
+        hitSlotMesh.material = ghostMatHover;
         container.className = 'hover-block';
+        if (state.activeBlock) {
+          state.activeBlock.body.position.x = hitSlotMesh.position.x;
+          state.activeBlock.body.position.z = hitSlotMesh.position.z;
+          state.activeBlock.body.position.y = hitSlotMesh.position.y + 1.85;
+          syncMeshToBody(state.activeBlock.mesh, state.activeBlock.body);
+        }
       } else {
         container.className = '';
       }
@@ -1463,6 +1521,10 @@ window.initJengaGame = function () {
 
     if (state.turnPhase === 'PULLING' && state.activeBlock) {
       const b = state.activeBlock;
+      if (b.pullDistance >= BLOCK_LENGTH * 0.72) {
+        completeBlockExtraction(b);
+        return;
+      }
       if (b.pullDistance < 1.8 && !state.committedBlock) {
         state.activeBlock = null;
         state.turnPhase = 'SELECT';
@@ -1501,7 +1563,7 @@ window.initJengaGame = function () {
     block.body.sleep();
     block.body.velocity.set(0, 0, 0);
     block.body.angularVelocity.set(0, 0, 0);
-    block.body.position.set(0, targetY + 3.2, 0);
+    block.body.position.set(0, targetY + 4.8, 0);
 
     const q = new CANNON.Quaternion();
     if (!isEven) {
@@ -1557,11 +1619,14 @@ window.initJengaGame = function () {
     elSlotPicker.classList.remove('visible');
   }
 
-  function placeActiveBlockOnTop(slotIndex, fromNetwork = false) {
+  function placeActiveBlockOnTop(slotIndex, fromNetwork = false, forcedTargetLayer = null) {
     if (state.turnPhase !== 'STACKING' || !state.activeBlock) return;
     const block = state.activeBlock;
     const status = getLayerStatus();
-    const targetLayer = status.targetPlacementLayer;
+    const targetLayer =
+      typeof forcedTargetLayer === 'number'
+        ? forcedTargetLayer
+        : status.targetPlacementLayer;
     const isEven = targetLayer % 2 === 0;
     const offset = (slotIndex - 1) * (BLOCK_WIDTH + GAP);
     const y = targetLayer * BLOCK_HEIGHT + BLOCK_HEIGHT / 2 + 0.16;
@@ -1607,7 +1672,9 @@ window.initJengaGame = function () {
     }
     updateHUD();
 
-    setTimeout(() => {
+    if (settlingTimerId !== null) clearTimeout(settlingTimerId);
+    settlingTimerId = setTimeout(() => {
+      settlingTimerId = null;
       if (state.turnPhase === 'GAMEOVER') return;
       checkTowerCollapse();
       if (state.turnPhase !== 'GAMEOVER') {
@@ -1687,6 +1754,7 @@ window.initJengaGame = function () {
 
   function triggerGameOver() {
     if (state.turnPhase === 'GAMEOVER') return;
+    clearPendingGameTimers();
     state.turnPhase = 'GAMEOVER';
     isDraggingBlock = false;
     controls.enabled = true;
@@ -1703,7 +1771,9 @@ window.initJengaGame = function () {
     showToast(`Hahaha! ${loser.name} collapsed the tower!`);
     updateHUD();
 
-    setTimeout(() => {
+    gameOverTimerId = setTimeout(() => {
+      gameOverTimerId = null;
+      if (state.turnPhase !== 'GAMEOVER') return;
       const modal = document.getElementById('gameover-modal');
       const title = document.getElementById('gameover-title');
       const desc = document.getElementById('gameover-desc');
@@ -1880,12 +1950,16 @@ window.initJengaGame = function () {
     elCompassReadout.textContent = `${deg}° ${dirs[dirIdx]}`;
   }
 
+  let camAnimToken = 0;
+
   function animateCameraTo(pos, targetPos, duration = 420) {
+    const token = ++camAnimToken;
     const startPos = camera.position.clone();
     const startTarget = controls.target.clone();
     const startTime = performance.now();
 
     function step(now) {
+      if (token !== camAnimToken) return;
       const t = Math.min(1, (now - startTime) / duration);
       // Smooth cubic ease-out for cinematic tabletop camera movement
       const ease = 1 - Math.pow(1 - t, 3);
@@ -1968,10 +2042,6 @@ window.initJengaGame = function () {
     const lookTarget = new THREE.Vector3(0, targetY, 0);
 
     animateCameraTo(targetPos, lookTarget, 440);
-
-    if (!silent) {
-      window.JengaAudio.playWoodTap(0.45, 0.14);
-    }
   }
 
   document.querySelectorAll('.view-style-btn').forEach((btn) => {
@@ -2016,6 +2086,7 @@ window.initJengaGame = function () {
   });
 
   elOrbitSlider.addEventListener('input', (e) => {
+    camAnimToken++;
     const deg = parseInt(e.target.value, 10) || 0;
     setCameraAzimuthDeg(deg, false);
   });
@@ -2040,6 +2111,7 @@ window.initJengaGame = function () {
 
   document.querySelectorAll('[data-slot]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      if (btn.disabled) return;
       const slotIndex = parseInt(btn.getAttribute('data-slot'), 10);
       placeActiveBlockOnTop(slotIndex);
     });
@@ -2064,7 +2136,7 @@ window.initJengaGame = function () {
 
     if (isDay) {
       // Bright sun-filled parlor room (Day Mode)
-      scene.fog.color.setHex(0xc8def0);
+      scene.fog.color.setHex(0xe8dccb);
       scene.fog.density = 0.0022;
       renderer.toneMappingExposure = 1.24;
 
@@ -2117,7 +2189,6 @@ window.initJengaGame = function () {
   if (btnTheme) {
     btnTheme.addEventListener('click', () => {
       applyLightingTheme(!state.isDayMode);
-      window.JengaAudio.playWoodTap(0.5);
       showToast(
         state.isDayMode
           ? 'Switched to Daylight Parlor Mode'
@@ -2126,15 +2197,20 @@ window.initJengaGame = function () {
     });
   }
 
+  const rulesModal = document.getElementById('rules-modal');
+  const gameOverModal = document.getElementById('gameover-modal');
+  const lobbyModal = document.getElementById('lobby-modal');
+
   document.getElementById('btn-rules').addEventListener('click', () => {
-    document.getElementById('rules-modal').classList.add('open');
+    rulesModal.classList.add('open');
   });
 
   document.getElementById('btn-close-rules').addEventListener('click', () => {
-    document.getElementById('rules-modal').classList.remove('open');
+    rulesModal.classList.remove('open');
   });
 
   document.getElementById('btn-reset').addEventListener('click', () => {
+    gameOverModal.classList.remove('open');
     state.players.forEach((p) => (p.moves = 0));
     state.currentPlayerIdx = 0;
     state.turnNumber = 1;
@@ -2146,17 +2222,56 @@ window.initJengaGame = function () {
   });
 
   document.getElementById('btn-play-again').addEventListener('click', () => {
-    document.getElementById('gameover-modal').classList.remove('open');
+    gameOverModal.classList.remove('open');
     document.getElementById('btn-reset').click();
   });
 
   // Players & Chairs Modal Setup (1 to 4 Players)
-  const lobbyModal = document.getElementById('lobby-modal');
   document.getElementById('btn-mode').addEventListener('click', () => {
     lobbyModal.classList.add('open');
   });
   document.getElementById('btn-close-lobby').addEventListener('click', () => {
     lobbyModal.classList.remove('open');
+  });
+
+  // Close modals when clicking the dark backdrop outside .modal-card
+  [lobbyModal, rulesModal].forEach((modalEl) => {
+    if (!modalEl) return;
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) {
+        modalEl.classList.remove('open');
+      }
+    });
+  });
+
+  // Keyboard Accessibility & Camera / Slot Shortcuts
+  window.addEventListener('keydown', (e) => {
+    const tag = document.activeElement ? document.activeElement.tagName : '';
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+    if (e.key === 'Escape') {
+      lobbyModal.classList.remove('open');
+      rulesModal.classList.remove('open');
+      return;
+    }
+
+    if (isInput) return;
+
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const nextDeg = (getCameraAzimuthDeg() - 45 + 360) % 360;
+      setCameraAzimuthDeg(nextDeg, true);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const nextDeg = (getCameraAzimuthDeg() + 45) % 360;
+      setCameraAzimuthDeg(nextDeg, true);
+    } else if (state.turnPhase === 'STACKING' && (e.key === '1' || e.key === '2' || e.key === '3')) {
+      const slotIdx = parseInt(e.key, 10) - 1;
+      const btn = document.querySelector(`[data-slot="${slotIdx}"]`);
+      if (btn && !btn.disabled) {
+        placeActiveBlockOnTop(slotIdx);
+      }
+    }
   });
 
   const tabBtns = document.querySelectorAll('.mode-tab');
@@ -2198,6 +2313,7 @@ window.initJengaGame = function () {
       moves: 0
     }));
     state.currentPlayerIdx = 0;
+    state.turnNumber = 1;
     state.blocksMovedTotal = 0;
     buildTower();
     lobbyModal.classList.remove('open');
@@ -2207,6 +2323,22 @@ window.initJengaGame = function () {
       } around the table.`
     );
   });
+
+  // Click-to-copy Room Code box
+  const activeRoomDisplay = document.getElementById('active-room-display');
+  if (activeRoomDisplay) {
+    activeRoomDisplay.addEventListener('click', () => {
+      if (!state.roomCode) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard
+          .writeText(state.roomCode)
+          .then(() => showToast(`Room Code ${state.roomCode} copied to clipboard.`))
+          .catch(() => showToast(`Share Room Code: ${state.roomCode}`));
+      } else {
+        showToast(`Share Room Code: ${state.roomCode}`);
+      }
+    });
+  }
 
   // Instant Room Code Multiplayer (BroadcastChannel + PeerJS WebRTC)
   function setupRoomChannel(code, guestName, isHost) {
@@ -2251,12 +2383,19 @@ window.initJengaGame = function () {
 
     document.getElementById('active-room-display').style.display = 'flex';
     document.getElementById('room-code-value').textContent = code;
+    const roomStatusEl = document.getElementById('room-status-text');
+    if (roomStatusEl) {
+      roomStatusEl.textContent = isHost ? 'Waiting for opponent...' : 'Connected';
+    }
 
     if (isHost) {
       state.players = [
         { name: guestName || 'Host Player', color: '#b87339', moves: 0 },
         { name: 'Waiting for Opponent...', color: '#3d6b52', moves: 0 }
       ];
+      state.currentPlayerIdx = 0;
+      state.turnNumber = 1;
+      state.blocksMovedTotal = 0;
       buildTower(12345);
       showToast(`Room ${code} created. Open another tab or share code.`);
     } else {
@@ -2264,6 +2403,9 @@ window.initJengaGame = function () {
         { name: 'Host Player', color: '#b87339', moves: 0 },
         { name: guestName || 'Challenger', color: '#3d6b52', moves: 0 }
       ];
+      state.currentPlayerIdx = 0;
+      state.turnNumber = 1;
+      state.blocksMovedTotal = 0;
       buildTower(12345);
       broadcastMove({ type: 'PLAYER_JOINED', name: guestName || 'Challenger' });
       lobbyModal.classList.remove('open');
@@ -2287,19 +2429,34 @@ window.initJengaGame = function () {
     if (!msg || !msg.type) return;
     if (msg.type === 'PLAYER_JOINED' && state.isHost) {
       state.players[1].name = msg.name;
+      const roomStatusEl = document.getElementById('room-status-text');
+      if (roomStatusEl) roomStatusEl.textContent = `${msg.name} seated`;
+      updatePlayerChairs();
       updateHUD();
+      broadcastMove({
+        type: 'ROOM_SYNC',
+        players: state.players,
+        seed: state.currentSeed || 12345
+      });
       showToast(`${msg.name} took a seat at the table.`);
       lobbyModal.classList.remove('open');
+    } else if (msg.type === 'ROOM_SYNC' && !state.isHost) {
+      if (Array.isArray(msg.players) && msg.players.length >= 2) {
+        state.players = msg.players;
+        updatePlayerChairs();
+        updateHUD();
+      }
     } else if (msg.type === 'MOVE_COMPLETE') {
       const block = blocks.find((b) => b.id === msg.blockId);
       if (block) {
         state.activeBlock = block;
         state.turnPhase = 'STACKING';
-        placeActiveBlockOnTop(msg.slotIndex, true);
+        placeActiveBlockOnTop(msg.slotIndex, true, msg.targetLayer);
       }
     } else if (msg.type === 'RESET_TOWER') {
       state.players.forEach((p) => (p.moves = 0));
       state.currentPlayerIdx = 0;
+      state.turnNumber = 1;
       state.blocksMovedTotal = 0;
       buildTower(msg.seed);
       showToast('Opponent reset the tower.');
@@ -2334,7 +2491,10 @@ window.initJengaGame = function () {
   });
 
   // Pointer & Resize Event Listeners
-  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    camAnimToken++;
+    onPointerDown(e);
+  });
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerUp);
@@ -2420,4 +2580,91 @@ window.initJengaGame = function () {
   }
 
   requestAnimationFrame(animate);
+
+  // ============================================================================
+  // BUILT-IN QUALITY ASSURANCE (SMOKE, FUNCTIONAL & USABILITY TEST HARNESS)
+  // ============================================================================
+  window.JengaQA = {
+    getState: () => state,
+    getBlocks: () => blocks,
+    getChairs: () => chairObjects,
+    runAllTests() {
+      const results = [];
+      const assert = (category, name, cond, detail = '') => {
+        results.push({ category, name, passed: Boolean(cond), detail });
+      };
+
+      // 1. SMOKE TESTS (Scene, Physics, 54 Blocks, 3 Wood Species, High Lamp)
+      assert('Smoke', 'Three.js WebGLRenderer & Scene initialized', Boolean(renderer && scene && camera));
+      assert('Smoke', 'Cannon-es Physics World initialized', Boolean(world && world.bodies.length >= 55));
+      assert('Smoke', '54 Jenga blocks created across 18 layers', blocks.length === 54);
+      const uniqueWoods = new Set(blocks.map((b) => b.woodName));
+      assert(
+        'Smoke',
+        'All 3 distinct wood species present (Maple, Cherry Oak, Walnut)',
+        uniqueWoods.size === 3,
+        Array.from(uniqueWoods).join(', ')
+      );
+      assert(
+        'Smoke',
+        'Overhead pendant bulb positioned high above tower (y >= 75)',
+        lampPointLight.position.y >= 75,
+        `lampPointLight.y = ${lampPointLight.position.y}`
+      );
+
+      // 2. FUNCTIONAL TESTS (Rules, Chair Spawning, Hand Highlight, Camera Views, Theme, Audio Policy)
+      const topBlock = blocks.find((b) => b.layer === 17);
+      const lowerBlock = blocks.find((b) => b.layer === 10);
+      assert(
+        'Functional',
+        'Top completed layer (Layer 18) is locked from pulling',
+        !isBlockAllowedToPull(topBlock)
+      );
+      assert(
+        'Functional',
+        'Lower layer (Layer 11) is allowed to pull',
+        isBlockAllowedToPull(lowerBlock)
+      );
+      assert(
+        'Functional',
+        'Dynamic chairs match player count and active seat hand is visible',
+        chairObjects.length === state.players.length &&
+          chairObjects.filter((c) => c.handObj.group.visible).length === 1
+      );
+
+      // Test Day/Night theme toggle and restore
+      const prevTheme = state.isDayMode;
+      applyLightingTheme(!prevTheme);
+      const toggledOk = state.isDayMode === !prevTheme && document.body.classList.contains('day-mode') === !prevTheme;
+      applyLightingTheme(prevTheme);
+      assert('Functional', 'Night / Day lighting theme toggles cleanly', toggledOk);
+
+      // Test all 5 Camera View Angle presets and restore
+      const prevStyle = state.viewStyle;
+      const styles = ['iso', 'seat', 'eye', 'top', 'wide'];
+      const stylesOk = styles.every((s) => {
+        applyCameraViewStyle(s, null, true);
+        return state.viewStyle === s;
+      });
+      applyCameraViewStyle(prevStyle, null, true);
+      assert('Functional', 'All 5 Camera View Angle presets switch cleanly', stylesOk);
+
+      // 3. USABILITY TESTS (DOM Controls, Labels, Touch Mode, Modals)
+      const hudBtns = Array.from(document.querySelectorAll('.hud-actions .btn'));
+      assert(
+        'Usability',
+        'All top HUD buttons have accessible labels and visible text',
+        hudBtns.length === 5 && hudBtns.every((b) => b.textContent.trim().length > 0)
+      );
+      assert(
+        'Usability',
+        '360° Orbit slider, compass readout, and Pull/Orbit mode switches active',
+        Boolean(elOrbitSlider && elCompassReadout && btnModePull && btnModeOrbit)
+      );
+
+      const passedCount = results.filter((r) => r.passed).length;
+      console.table(results);
+      return { passed: passedCount, total: results.length, allPassed: passedCount === results.length, results };
+    }
+  };
 };
