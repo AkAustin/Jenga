@@ -475,7 +475,227 @@ window.initJengaGame = function () {
   }
 
   /**
-   * Spawns and arranges chairs around the circular table matching `state.players.length`.
+   * Builds a friendly, sculpted 3D Open Palm Hand resting on the player's side of the table,
+   * complete with tailored sleeve cuff in the player's color, wrist, palm, and 5 spread fingers.
+   */
+  function createOpenPalmHandMesh(playerColorHex) {
+    const handGroup = new THREE.Group();
+
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: 0xe0ac8b,
+      roughness: 0.52,
+      metalness: 0.02
+    });
+
+    const nailMat = new THREE.MeshStandardMaterial({
+      color: 0xf5d6c3,
+      roughness: 0.32,
+      metalness: 0.05
+    });
+
+    const sleeveMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(playerColorHex),
+      roughness: 0.6,
+      metalness: 0.05
+    });
+
+    const cuffMat = new THREE.MeshStandardMaterial({
+      color: 0xfaf6f0,
+      roughness: 0.45
+    });
+
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xd9a05b,
+      roughness: 0.25,
+      metalness: 0.8
+    });
+
+    // 1. Forearm Sleeve & White Shirt Cuff resting near the table rim (+Z local points toward chair)
+    const sleeveGeo = new THREE.CylinderGeometry(1.45, 1.75, 4.6, 20);
+    sleeveGeo.rotateX(Math.PI / 2);
+    const sleeveMesh = new THREE.Mesh(sleeveGeo, sleeveMat);
+    sleeveMesh.scale.set(1.15, 0.72, 1.0);
+    sleeveMesh.position.set(0, 0.95, 4.6);
+    sleeveMesh.castShadow = true;
+    sleeveMesh.receiveShadow = true;
+    handGroup.add(sleeveMesh);
+
+    const cuffGeo = new THREE.CylinderGeometry(1.32, 1.42, 0.9, 20);
+    cuffGeo.rotateX(Math.PI / 2);
+    const cuffMesh = new THREE.Mesh(cuffGeo, cuffMat);
+    cuffMesh.scale.set(1.12, 0.7, 1.0);
+    cuffMesh.position.set(0, 0.82, 2.15);
+    cuffMesh.castShadow = true;
+    handGroup.add(cuffMesh);
+
+    // Subtle wristwatch / cuff accent
+    const watchBandGeo = new THREE.CylinderGeometry(1.26, 1.3, 0.45, 20);
+    watchBandGeo.rotateX(Math.PI / 2);
+    const watchBand = new THREE.Mesh(watchBandGeo, goldMat);
+    watchBand.scale.set(1.12, 0.72, 1.0);
+    watchBand.position.set(0, 0.78, 1.65);
+    handGroup.add(watchBand);
+
+    // 2. Sculpted Open Palm Cushion resting on the tabletop
+    const palmPivot = new THREE.Group();
+    palmPivot.position.set(0, 0.52, 0);
+    handGroup.add(palmPivot);
+
+    const palmGeo = new THREE.SphereGeometry(1.65, 24, 18);
+    const palmMesh = new THREE.Mesh(palmGeo, skinMat);
+    palmMesh.scale.set(1.05, 0.34, 1.18);
+    palmMesh.position.set(0, 0, 0.1);
+    palmMesh.castShadow = true;
+    palmMesh.receiveShadow = true;
+    palmPivot.add(palmMesh);
+
+    // 3. Thumb (spread naturally in a friendly open-palm gesture)
+    const thumbGroup = new THREE.Group();
+    thumbGroup.position.set(-1.35, -0.02, 0.35);
+    thumbGroup.rotation.y = 0.58; // Angled outward
+    palmPivot.add(thumbGroup);
+
+    const thumbProxGeo = new THREE.CylinderGeometry(0.34, 0.42, 1.35, 14);
+    thumbProxGeo.rotateX(Math.PI / 2);
+    const thumbProx = new THREE.Mesh(thumbProxGeo, skinMat);
+    thumbProx.scale.set(1.0, 0.78, 1.0);
+    thumbProx.position.set(0, 0, -0.6);
+    thumbProx.castShadow = true;
+    thumbGroup.add(thumbProx);
+
+    const thumbDistGeo = new THREE.CylinderGeometry(0.28, 0.34, 1.1, 14);
+    thumbDistGeo.rotateX(Math.PI / 2);
+    const thumbDist = new THREE.Mesh(thumbDistGeo, skinMat);
+    thumbDist.scale.set(1.0, 0.76, 1.0);
+    thumbDist.position.set(0, 0, -1.65);
+    thumbDist.castShadow = true;
+    thumbGroup.add(thumbDist);
+
+    const thumbTipGeo = new THREE.SphereGeometry(0.28, 14, 12);
+    const thumbTip = new THREE.Mesh(thumbTipGeo, skinMat);
+    thumbTip.scale.set(1.0, 0.76, 1.1);
+    thumbTip.position.set(0, 0, -2.2);
+    thumbGroup.add(thumbTip);
+
+    // 4. Four Spread Fingers (Index, Middle, Ring, Little) resting open on the table
+    const fingerSpecs = [
+      { x: -1.02, z: -1.45, len: 2.35, r1: 0.31, r2: 0.24, splay: 0.15 },  // Index
+      { x: -0.34, z: -1.62, len: 2.62, r1: 0.33, r2: 0.25, splay: 0.04 },  // Middle
+      { x: 0.36, z: -1.52, len: 2.42, r1: 0.31, r2: 0.24, splay: -0.06 },  // Ring
+      { x: 1.02, z: -1.28, len: 1.95, r1: 0.27, r2: 0.21, splay: -0.18 }   // Little
+    ];
+
+    const fingerGroups = [];
+
+    fingerSpecs.forEach((f) => {
+      const fGroup = new THREE.Group();
+      fGroup.position.set(f.x, -0.04, f.z);
+      fGroup.rotation.y = f.splay;
+
+      // Knuckle sphere
+      const knuckle = new THREE.Mesh(
+        new THREE.SphereGeometry(f.r1 * 1.02, 12, 10),
+        skinMat
+      );
+      knuckle.scale.set(1, 0.75, 1);
+      fGroup.add(knuckle);
+
+      // Finger shaft
+      const shaftGeo = new THREE.CylinderGeometry(f.r2, f.r1, f.len, 14);
+      shaftGeo.rotateX(Math.PI / 2);
+      const shaft = new THREE.Mesh(shaftGeo, skinMat);
+      shaft.scale.set(1.0, 0.76, 1.0);
+      shaft.position.set(0, 0, -f.len / 2);
+      shaft.castShadow = true;
+      shaft.receiveShadow = true;
+      fGroup.add(shaft);
+
+      // Rounded fingertip
+      const tip = new THREE.Mesh(
+        new THREE.SphereGeometry(f.r2, 14, 12),
+        skinMat
+      );
+      tip.scale.set(1.0, 0.76, 1.15);
+      tip.position.set(0, 0, -f.len);
+      fGroup.add(tip);
+
+      // Subtle fingernail
+      const nail = new THREE.Mesh(
+        new THREE.SphereGeometry(f.r2 * 0.78, 10, 8),
+        nailMat
+      );
+      nail.scale.set(0.95, 0.25, 1.15);
+      nail.position.set(0, f.r2 * 0.62, -f.len + 0.12);
+      fGroup.add(nail);
+
+      palmPivot.add(fGroup);
+      fingerGroups.push(fGroup);
+    });
+
+    return { group: handGroup, palmPivot, fingerGroups };
+  }
+
+  /**
+   * Creates a soft radial glow texture for highlighting the active player's side of the circular table.
+   */
+  function createTableZoneHighlightTexture(colorHex) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    const grad = ctx.createRadialGradient(256, 250, 10, 256, 240, 240);
+    grad.addColorStop(0, colorHex);
+    grad.addColorStop(0.55, colorHex);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 512, 256);
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  /**
+   * Creates a crisp tabletop nameplate banner showing the player's name & active turn status.
+   */
+  function createTurnPlaqueTexture(playerName, colorHex, isActive) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 112;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = isActive ? 'rgba(26, 17, 10, 0.94)' : 'rgba(20, 14, 9, 0.72)';
+    ctx.beginPath();
+    ctx.roundRect(8, 8, 496, 96, 28);
+    ctx.fill();
+
+    ctx.lineWidth = isActive ? 5 : 2;
+    ctx.strokeStyle = isActive ? colorHex : 'rgba(218, 176, 118, 0.28)';
+    ctx.stroke();
+
+    ctx.fillStyle = isActive ? '#ffffff' : '#bfb09e';
+    ctx.font = isActive
+      ? '800 32px "Inter", "Segoe UI", sans-serif'
+      : '600 26px "Inter", "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = isActive
+      ? `✋ ${playerName.toUpperCase()} • YOUR TURN`
+      : `🪑 ${playerName}`;
+    ctx.fillText(label, 256, 56);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  // Warm point light that illuminates the active player's side of the table
+  const activeSeatLight = new THREE.PointLight(0xffb84d, 1.3, 45, 1.5);
+  activeSeatLight.position.set(0, 12, 24);
+  scene.add(activeSeatLight);
+
+  /**
+   * Spawns and arranges chairs, table-side highlight zones, nameplates, and open-palm hands
+   * around the circular table matching `state.players.length`.
    */
   function updatePlayerChairs() {
     while (chairsGroup.children.length > 0) {
@@ -484,10 +704,11 @@ window.initJengaGame = function () {
     chairObjects = [];
 
     const count = state.players.length;
-    const chairRadius = 40.5; // Placed comfortably around the 28-radius circular table
+    const chairRadius = 40.5;
+    // Arc span for each player's highlighted side of the circular table
+    const arcSpan = Math.min(Math.PI * 0.72, (Math.PI * 1.65) / count);
 
     for (let i = 0; i < count; i++) {
-      // Distribute chairs evenly around the 360° table
       const angle = (i * 2 * Math.PI) / count;
       const player = state.players[i];
       const chairObj = createSingleChairMesh(player.color);
@@ -495,11 +716,89 @@ window.initJengaGame = function () {
       const cx = Math.sin(angle) * chairRadius;
       const cz = Math.cos(angle) * chairRadius;
       chairObj.group.position.set(cx, 0, cz);
-      // Rotate chair so its front (-Z local) faces inward toward the table center (0,0,0)
       chairObj.group.rotation.y = angle;
-
       chairsGroup.add(chairObj.group);
-      chairObjects.push(chairObj);
+
+      // 1. Table-Side Sector Highlight Mesh on the circular tabletop
+      const seatTableGroup = new THREE.Group();
+      seatTableGroup.rotation.y = angle;
+      chairsGroup.add(seatTableGroup);
+
+      // RingGeometry lies in XY plane; rotateX(-PI/2) puts it flat on XZ tabletop.
+      // Angle Math.PI/2 in RingGeometry corresponds to +Z (the player's side of the table).
+      const sectorGeo = new THREE.RingGeometry(
+        10.5,
+        27.75,
+        48,
+        1,
+        Math.PI / 2 - arcSpan / 2,
+        arcSpan
+      );
+      sectorGeo.rotateX(-Math.PI / 2);
+      const sectorMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(player.color),
+        transparent: true,
+        opacity: 0.0,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      const sectorMesh = new THREE.Mesh(sectorGeo, sectorMat);
+      sectorMesh.position.y = 0.03;
+      seatTableGroup.add(sectorMesh);
+
+      // Glowing outer rim arc along the player's table edge
+      const rimArcGeo = new THREE.RingGeometry(
+        26.8,
+        27.85,
+        48,
+        1,
+        Math.PI / 2 - arcSpan / 2,
+        arcSpan
+      );
+      rimArcGeo.rotateX(-Math.PI / 2);
+      const rimArcMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(player.color),
+        transparent: true,
+        opacity: 0.0,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      const rimArcMesh = new THREE.Mesh(rimArcGeo, rimArcMat);
+      rimArcMesh.position.y = 0.06;
+      seatTableGroup.add(rimArcMesh);
+
+      // 2. Tabletop Turn Nameplate Plaque on the player's side of the table
+      const plaqueGeo = new THREE.PlaneGeometry(11.5, 2.5);
+      plaqueGeo.rotateX(-Math.PI / 2.25); // Tilted slightly up for easy reading
+      const plaqueMat = new THREE.MeshBasicMaterial({
+        map: createTurnPlaqueTexture(player.name, player.color, i === state.currentPlayerIdx),
+        transparent: true,
+        depthWrite: false
+      });
+      const plaqueMesh = new THREE.Mesh(plaqueGeo, plaqueMat);
+      plaqueMesh.position.set(0, 0.35, 24.4);
+      seatTableGroup.add(plaqueMesh);
+
+      // 3. Friendly 3D Open Palm Hand resting on the player's side of the table
+      const handObj = createOpenPalmHandMesh(player.color);
+      // Positioned naturally on the right-hand side of the player's table zone, open palm on the table
+      handObj.group.position.set(6.8, 0.02, 20.6);
+      handObj.group.rotation.y = 0.24; // Angled slightly inward toward the tower
+      seatTableGroup.add(handObj.group);
+
+      chairObjects.push({
+        ...chairObj,
+        seatTableGroup,
+        sectorMesh,
+        sectorMat,
+        rimArcMesh,
+        rimArcMat,
+        plaqueMesh,
+        plaqueMat,
+        handObj,
+        player,
+        angle
+      });
     }
 
     if (elSeatCountBadge) {
@@ -509,14 +808,34 @@ window.initJengaGame = function () {
   }
 
   function highlightActivePlayerChair() {
+    const count = state.players.length;
     chairObjects.forEach((c, idx) => {
       const isTurn = idx === state.currentPlayerIdx;
-      // Subtle push-in / active glow for the player whose turn it currently is
-      const count = state.players.length;
       const angle = (idx * 2 * Math.PI) / count;
-      const radius = isTurn ? 38.2 : 41.5;
+      const radius = isTurn ? 37.8 : 41.8;
       c.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-      c.cushion.material.emissive.setHex(isTurn ? 0x221406 : 0x000000);
+      c.cushion.material.emissive.setHex(isTurn ? 0x261505 : 0x000000);
+
+      // Highlight the active player's side of the circular table
+      c.sectorMat.opacity = isTurn ? 0.24 : 0.0;
+      c.rimArcMat.opacity = isTurn ? 0.88 : 0.14;
+
+      // Update nameplate texture for active vs waiting player
+      if (c.plaqueMat.map) c.plaqueMat.map.dispose();
+      c.plaqueMat.map = createTurnPlaqueTexture(c.player.name, c.player.color, isTurn);
+      c.plaqueMat.needsUpdate = true;
+
+      // Show the open palm hand resting on the table for the player whose turn it is!
+      c.handObj.group.visible = isTurn;
+
+      if (isTurn) {
+        activeSeatLight.color.set(c.player.color);
+        activeSeatLight.position.set(
+          Math.sin(angle) * 23,
+          11,
+          Math.cos(angle) * 23
+        );
+      }
     });
   }
 
@@ -1752,6 +2071,24 @@ window.initJengaGame = function () {
     checkCounter++;
     if (checkCounter % 12 === 0 && state.turnPhase !== 'SELECT') {
       checkTowerCollapse();
+    }
+
+    // Gentle friendly pulse on the active player's table side & open-palm hand on the table
+    const activeChair = chairObjects[state.currentPlayerIdx];
+    if (activeChair) {
+      const pulse = 0.5 + 0.5 * Math.sin(now * 0.004);
+      activeChair.sectorMat.opacity = 0.16 + pulse * 0.14;
+      activeChair.rimArcMat.opacity = 0.65 + pulse * 0.32;
+
+      if (activeChair.handObj && activeChair.handObj.group.visible) {
+        // Subtle natural breathing & friendly finger tap on the table surface
+        activeChair.handObj.palmPivot.position.y =
+          0.52 + Math.sin(now * 0.0035) * 0.04;
+        activeChair.handObj.fingerGroups.forEach((fg, fIdx) => {
+          const tapWave = Math.max(0, Math.sin(now * 0.006 - fIdx * 0.55));
+          fg.rotation.x = tapWave * 0.09;
+        });
+      }
     }
 
     controls.update();
