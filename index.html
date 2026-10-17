@@ -58,19 +58,19 @@
 
     <div class="hud-actions">
       <button id="btn-mode" class="btn btn-primary" title="Switch Players (Spawns Chairs Around Table) or Create Online Room">
-        🪑 <span class="btn-label">Players &amp; Chairs</span>
+        <span class="btn-label">Players &amp; Seating</span>
       </button>
       <button id="btn-theme" class="btn" title="Toggle between Night Parlor and Day Mode">
-        <span id="theme-icon">🌙</span> <span id="theme-label" class="btn-label">Night</span>
+        <span id="theme-icon">◐</span> <span id="theme-label" class="btn-label">Night</span>
       </button>
       <button id="btn-rules" class="btn" title="Official Jenga Rules">
-        📜 <span class="btn-label">Rules</span>
+        <span class="btn-label">Rules</span>
       </button>
       <button id="btn-sound" class="btn" title="Toggle Wood Audio">
-        <span id="sound-icon">🔊</span> <span id="sound-label" class="btn-label">Sound: ON</span>
+        <span id="sound-icon">♪</span> <span id="sound-label" class="btn-label">Audio: ON</span>
       </button>
       <button id="btn-reset" class="btn btn-danger" title="Rebuild 54-Block Tower">
-        🔄 <span class="btn-label">Reset</span>
+        <span class="btn-label">Reset</span>
       </button>
     </div>
   </header>
@@ -83,7 +83,7 @@
     <div class="panel-card">
       <h3>
         <span>Seated at Table</span>
-        <span id="seat-count-badge" style="font-size:10px; color:#e59838;">2 Chairs</span>
+        <span id="seat-count-badge" style="font-size:10px; color:#d4a359;">2 Chairs</span>
       </h3>
       <div id="player-list" class="player-list"></div>
     </div>
@@ -91,7 +91,7 @@
     <div class="panel-card">
       <h3>
         <span>Tower Stability</span>
-        <span id="stability-text" style="color:#4cd97b; font-weight:700;">Solid &amp; Balanced</span>
+        <span id="stability-text" style="color:#c8a878; font-weight:700;">Solid &amp; Balanced</span>
       </h3>
       <div class="meter-bar-bg">
         <div id="stability-bar" class="meter-bar-fill"></div>
@@ -112,26 +112,26 @@
 
   <!-- Bottom HUD: Camera View Angle Styles, 360° Turntable Controls, Touch Mode Switch & Turn Coach -->
   <footer class="hud-bottom">
-    <!-- Camera View Angle Style Presets (Best-in-Class Tabletop Camera Switcher) -->
+    <!-- Camera View Angle Style Presets (Clean Architectural Switcher) -->
     <div class="view-angle-dock" aria-label="Camera View Angle Styles">
-      <span class="view-dock-label">🎥 View Angle:</span>
+      <span class="view-dock-label">CAMERA VIEW</span>
       <button class="view-style-btn active" data-view-style="iso" title="Classic 45° Corner Isometric View — see two sides of the tower at once">
-        📐 3/4 Corner
+        45° Corner
       </button>
       <button class="view-style-btn" data-view-style="seat" title="Active Player's Chair POV — view over your highlighted table edge &amp; hand">
-        🪑 Player Seat
+        Player Seat
       </button>
       <button class="view-style-btn" data-view-style="eye" title="Close-up Horizontal Eye-Level View — precision block pulling">
-        🔍 Eye-Level
+        Eye Level
       </button>
       <button id="cam-top" class="view-style-btn" data-view-style="top" title="Overhead Top-Down View — effortless top-layer stacking">
-        🦅 Top Stack
+        Top Stack
       </button>
       <button class="view-style-btn" data-view-style="wide" title="Wide Parlor Room View — see all chairs &amp; circular table">
-        🏛️ Wide Table
+        Wide Table
       </button>
       <button id="btn-auto-cam" class="view-auto-pill active" title="Automatically glide camera to Top View when stacking and to the active player's seat on turn change">
-        ✨ Auto-Angle: ON
+        Auto-Cam: ON
       </button>
     </div>
 
@@ -149,8 +149,8 @@
 
         <!-- Touch Mode Switch (Especially helpful on Mobile/Tablet) -->
         <div class="touch-mode-toggle" title="Switch 1-finger action between Pulling Blocks and 360° Camera Orbit">
-          <button id="mode-btn-pull" class="touch-mode-btn active">🖐️ Pull</button>
-          <button id="mode-btn-orbit" class="touch-mode-btn">🔄 360° View</button>
+          <button id="mode-btn-pull" class="touch-mode-btn active">Pull Block</button>
+          <button id="mode-btn-orbit" class="touch-mode-btn">360° Orbit</button>
         </div>
       </div>
 
@@ -158,7 +158,7 @@
       <div class="action-coach">
         <span id="coach-badge" class="coach-step-badge">STEP 1 • EXTRACT</span>
         <span id="coach-text" class="coach-text">
-          Drag any block below the top completed row along its length. Choose a View Angle or orbit 360°!
+          Drag any block below the top completed row along its length. Select a Camera View or orbit 360°.
         </span>
         <div id="slot-picker" class="slot-picker">
           <button class="btn btn-primary" data-slot="0">Left Slot</button>
@@ -178,8 +178,8 @@
       </p>
 
       <div class="mode-tabs">
-        <div class="mode-tab active" data-mode="pass">🪑 Table Players (1–4)</div>
-        <div class="mode-tab" data-mode="online">🌐 Instant Room Code</div>
+        <div class="mode-tab active" data-mode="pass">Table Players (1–4)</div>
+        <div class="mode-tab" data-mode="online">Instant Room Code</div>
       </div>
 
       <!-- Pass & Play / Solo Section -->
@@ -215,7 +215,7 @@
 
         <div style="display:flex; gap:10px; margin-bottom:14px;">
           <button id="btn-create-room" class="btn btn-primary" style="flex:1; justify-content:center;">
-            ✨ Create Room Code
+            Create Room Code
           </button>
         </div>
 
@@ -224,7 +224,7 @@
             <div style="font-size:11px; color:#bfb09e;">SHARE ROOM CODE:</div>
             <div id="room-code-value" class="room-code-text">------</div>
           </div>
-          <span style="font-size:12px; color:#4cd97b;">Waiting for opponent...</span>
+          <span style="font-size:12px; color:#c8a878;">Waiting for opponent...</span>
         </div>
 
         <div class="form-group" style="margin-top:14px;">
@@ -246,11 +246,11 @@
       <ul class="rules-list">
         <li>
           <span class="rule-num">1</span>
-          <div><strong>360° Parlor Table &amp; Player Chairs:</strong> Drag the background, use two fingers on mobile, or slide the bottom <strong>360° Turntable Slider</strong> to inspect all 4 sides of the tower and the chairs around the table.</div>
+          <div><strong>360° Parlor Table &amp; Player Chairs:</strong> Drag the background, use two fingers on mobile, or use the <strong>Camera View</strong> bar to inspect all 4 sides of the tower and the chairs around the table.</div>
         </li>
         <li>
           <span class="rule-num">2</span>
-          <div><strong>3 Wood Colors &amp; Block Tension:</strong> Blocks are crafted from <strong>Natural Maple</strong>, <strong>Honey Cherry Oak</strong>, and <strong>American Walnut</strong>. Tap or hover a block to check whether it sits Loose, Snug, or Tight!</div>
+          <div><strong>3 Wood Colors &amp; Block Tension:</strong> Blocks are crafted from <strong>Natural Maple</strong>, <strong>Honey Cherry Oak</strong>, and <strong>American Walnut</strong>. Tap or hover a block to check whether it sits Loose, Snug, or Tight.</div>
         </li>
         <li>
           <span class="rule-num">3</span>
@@ -258,11 +258,11 @@
         </li>
         <li>
           <span class="rule-num">4</span>
-          <div><strong>Stacking &amp; Stability Check:</strong> Once pulled out, tap one of the 3 glowing perpendicular slots on top. The tower must remain standing for 1.1 seconds to complete your turn!</div>
+          <div><strong>Stacking &amp; Stability Check:</strong> Once pulled out, tap one of the 3 perpendicular slots on top. The tower must remain standing for 1.1 seconds to complete your turn.</div>
         </li>
       </ul>
       <div style="display:flex; justify-content:flex-end;">
-        <button id="btn-close-rules" class="btn btn-primary">Got It, Let's Play!</button>
+        <button id="btn-close-rules" class="btn btn-primary">Close</button>
       </div>
     </div>
   </div>
@@ -270,11 +270,10 @@
   <!-- Game Over Modal -->
   <div id="gameover-modal" class="modal-backdrop">
     <div class="modal-card" style="text-align:center;">
-      <div style="font-size:46px; margin-bottom:8px;">💥🪵</div>
-      <h2 id="gameover-title">Tower Collapsed!</h2>
+      <h2 id="gameover-title">Tower Collapsed</h2>
       <p id="gameover-desc" class="subtitle" style="margin-top:8px; font-size:14px;"></p>
       <div style="display:flex; justify-content:center; gap:12px; margin-top:20px;">
-        <button id="btn-play-again" class="btn btn-primary">🔄 Restack &amp; Play Again</button>
+        <button id="btn-play-again" class="btn btn-primary">Restack &amp; Play Again</button>
       </div>
     </div>
   </div>

@@ -24,8 +24,8 @@ window.initJengaGame = function () {
     mode: 'pass',
     interactionMode: 'pull', // 'pull' | 'orbit'
     players: [
-      { name: 'Player 1', color: '#e59838', moves: 0 },
-      { name: 'Player 2', color: '#4cd97b', moves: 0 }
+      { name: 'Player 1', color: '#b87339', moves: 0 },
+      { name: 'Player 2', color: '#3d6b52', moves: 0 }
     ],
     currentPlayerIdx: 0,
     turnPhase: 'SELECT', // 'SELECT' | 'PULLING' | 'STACKING' | 'SETTLING' | 'GAMEOVER'
@@ -493,48 +493,49 @@ window.initJengaGame = function () {
    * - Multi-joint articulated fingers (knuckle + middle PIP joint + glossy fingernails)
    * - Gold Signet Ring on the ring finger
    */
-  function createOpenPalmHandMesh(playerColorHex) {
+  function createOpenPalmHandMesh() {
     const handGroup = new THREE.Group();
 
     const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xdba382,
-      roughness: 0.44,
-      metalness: 0.03
-    });
-
-    const palmCreaseMat = new THREE.MeshStandardMaterial({
-      color: 0xc98d6b,
-      roughness: 0.52,
+      color: 0xd19877,
+      roughness: 0.58,
       metalness: 0.02
     });
 
-    const nailMat = new THREE.MeshStandardMaterial({
-      color: 0xf7ddd0,
-      roughness: 0.22,
-      metalness: 0.08
+    const palmCreaseMat = new THREE.MeshStandardMaterial({
+      color: 0xbf8363,
+      roughness: 0.64,
+      metalness: 0.01
     });
 
+    const nailMat = new THREE.MeshStandardMaterial({
+      color: 0xeed4c6,
+      roughness: 0.32,
+      metalness: 0.04
+    });
+
+    // Tailored dark charcoal-espresso wool suit sleeve (non-cartoon realistic fabric)
     const sleeveMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(playerColorHex),
-      roughness: 0.52,
-      metalness: 0.08
+      color: 0x1f1b18,
+      roughness: 0.78,
+      metalness: 0.02
     });
 
     const cuffMat = new THREE.MeshStandardMaterial({
-      color: 0xfcfaf7,
-      roughness: 0.38
+      color: 0xf4efe8,
+      roughness: 0.52
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xffc65c,
-      roughness: 0.2,
-      metalness: 0.88
+      color: 0xd4a359,
+      roughness: 0.26,
+      metalness: 0.85
     });
 
     const obsidianMat = new THREE.MeshStandardMaterial({
-      color: 0x111318,
-      roughness: 0.15,
-      metalness: 0.6
+      color: 0x141518,
+      roughness: 0.18,
+      metalness: 0.55
     });
 
     // 1. Tailored Jacket Sleeve & Crisp French Cuff
@@ -603,8 +604,8 @@ window.initJengaGame = function () {
     hourHand.rotation.y = 0.5;
     watchGroup.add(hourHand);
 
-    // Cuban-style gold bracelet link just ahead of the watch
-    const chainGeo = new THREE.TorusGeometry(1.18, 0.09, 10, 24);
+    // Subtle brushed brass bracelet link just ahead of the watch
+    const chainGeo = new THREE.TorusGeometry(1.18, 0.08, 10, 24);
     const chainMesh = new THREE.Mesh(chainGeo, goldMat);
     chainMesh.scale.set(1.14, 0.72, 1.0);
     chainMesh.position.set(0, 0.76, 1.12);
@@ -641,7 +642,7 @@ window.initJengaGame = function () {
     heelPad.position.set(0.82, -0.06, 0.52);
     palmPivot.add(heelPad);
 
-    // 4. Articulated Thumb (2 segments + glossy thumbnail)
+    // 4. Articulated Thumb (2 segments + natural thumbnail)
     const thumbGroup = new THREE.Group();
     thumbGroup.position.set(-1.38, -0.02, 0.36);
     thumbGroup.rotation.y = 0.62;
@@ -684,11 +685,11 @@ window.initJengaGame = function () {
     thumbNail.position.set(0, 0.18, -0.95);
     thumbDistGroup.add(thumbNail);
 
-    // 5. Four 2-Joint Articulated Fingers (Index, Middle, Ring with Gold Signet Ring, Pinky)
+    // 5. Four 2-Joint Articulated Fingers (Index, Middle, Ring with Signet Ring, Pinky)
     const fingerSpecs = [
       { x: -1.04, z: -1.42, l1: 1.32, l2: 1.18, r1: 0.33, rMid: 0.28, r2: 0.23, splay: 0.14, hasRing: false }, // Index
       { x: -0.35, z: -1.58, l1: 1.48, l2: 1.32, r1: 0.35, rMid: 0.29, r2: 0.24, splay: 0.03, hasRing: false }, // Middle
-      { x: 0.36,  z: -1.48, l1: 1.38, l2: 1.22, r1: 0.33, rMid: 0.28, r2: 0.23, splay: -0.06, hasRing: true }, // Ring (with Gold Signet!)
+      { x: 0.36,  z: -1.48, l1: 1.38, l2: 1.22, r1: 0.33, rMid: 0.28, r2: 0.23, splay: -0.06, hasRing: true }, // Ring (with Signet)
       { x: 1.04,  z: -1.24, l1: 1.08, l2: 0.98, r1: 0.28, rMid: 0.24, r2: 0.19, splay: -0.19, hasRing: false } // Little
     ];
 
@@ -717,7 +718,7 @@ window.initJengaGame = function () {
       proxMesh.receiveShadow = true;
       fGroup.add(proxMesh);
 
-      // Swag Gold Signet Ring on the Ring Finger!
+      // Brushed Gold & Onyx Signet Ring on the Ring Finger
       if (f.hasRing) {
         const ringBand = new THREE.Mesh(
           new THREE.CylinderGeometry(f.r1 * 1.06, f.r1 * 1.08, 0.32, 20),
@@ -736,7 +737,7 @@ window.initJengaGame = function () {
         fGroup.add(signetTop);
       }
 
-      // Middle Knuckle Pivot (PIP joint) so the fingertip curls down naturally when drumming!
+      // Middle Knuckle Pivot (PIP joint) so the fingertip curls down naturally when drumming
       const distGroup = new THREE.Group();
       distGroup.position.set(0, 0, -f.l1);
       fGroup.add(distGroup);
@@ -766,7 +767,7 @@ window.initJengaGame = function () {
       tip.position.set(0, 0, -f.l2);
       distGroup.add(tip);
 
-      // Glossy contoured fingernail
+      // Natural contoured fingernail
       const nail = new THREE.Mesh(
         new THREE.SphereGeometry(f.r2 * 0.82, 12, 10),
         nailMat
@@ -784,26 +785,7 @@ window.initJengaGame = function () {
   }
 
   /**
-   * Creates a soft radial glow texture for highlighting the active player's side of the circular table.
-   */
-  function createTableZoneHighlightTexture(colorHex) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-
-    const grad = ctx.createRadialGradient(256, 250, 10, 256, 240, 240);
-    grad.addColorStop(0, colorHex);
-    grad.addColorStop(0.55, colorHex);
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 256);
-    return new THREE.CanvasTexture(canvas);
-  }
-
-  /**
-   * Creates a crisp tabletop nameplate banner showing the player's name & active turn status.
+   * Creates an engraved walnut & brushed-brass tabletop nameplate plaque (no cartoon emojis).
    */
   function createTurnPlaqueTexture(playerName, colorHex, isActive) {
     const canvas = document.createElement('canvas');
@@ -811,24 +793,24 @@ window.initJengaGame = function () {
     canvas.height = 112;
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = isActive ? 'rgba(26, 17, 10, 0.94)' : 'rgba(20, 14, 9, 0.72)';
+    ctx.fillStyle = isActive ? 'rgba(24, 16, 10, 0.94)' : 'rgba(18, 13, 9, 0.78)';
     ctx.beginPath();
-    ctx.roundRect(8, 8, 496, 96, 28);
+    ctx.roundRect(10, 12, 492, 88, 10);
     ctx.fill();
 
-    ctx.lineWidth = isActive ? 5 : 2;
-    ctx.strokeStyle = isActive ? colorHex : 'rgba(218, 176, 118, 0.28)';
+    ctx.lineWidth = isActive ? 3.5 : 1.5;
+    ctx.strokeStyle = isActive ? '#d4a359' : 'rgba(212, 163, 89, 0.28)';
     ctx.stroke();
 
-    ctx.fillStyle = isActive ? '#ffffff' : '#bfb09e';
+    ctx.fillStyle = isActive ? '#f5e6cf' : '#a89884';
     ctx.font = isActive
-      ? '800 32px "Inter", "Segoe UI", sans-serif'
-      : '600 26px "Inter", "Segoe UI", sans-serif';
+      ? '700 28px "Inter", "Segoe UI", sans-serif'
+      : '500 24px "Inter", "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const label = isActive
-      ? `✋ ${playerName.toUpperCase()} • YOUR TURN`
-      : `🪑 ${playerName}`;
+      ? `${playerName.toUpperCase()}  •  ACTIVE TURN`
+      : playerName.toUpperCase();
     ctx.fillText(label, 256, 56);
 
     const tex = new THREE.CanvasTexture(canvas);
@@ -837,12 +819,12 @@ window.initJengaGame = function () {
   }
 
   // Warm point light that illuminates the active player's side of the table
-  const activeSeatLight = new THREE.PointLight(0xffb84d, 1.3, 45, 1.5);
+  const activeSeatLight = new THREE.PointLight(0xffd296, 1.15, 45, 1.5);
   activeSeatLight.position.set(0, 12, 24);
   scene.add(activeSeatLight);
 
   /**
-   * Spawns and arranges chairs, table-side highlight zones, nameplates, and open-palm hands
+   * Spawns and arranges chairs, subtle brass table-side inlays, nameplates, and open-palm hands
    * around the circular table matching `state.players.length`.
    */
   function updatePlayerChairs() {
@@ -853,7 +835,6 @@ window.initJengaGame = function () {
 
     const count = state.players.length;
     const chairRadius = 40.5;
-    // Arc span for each player's highlighted side of the circular table
     const arcSpan = Math.min(Math.PI * 0.72, (Math.PI * 1.65) / count);
 
     for (let i = 0; i < count; i++) {
@@ -867,16 +848,14 @@ window.initJengaGame = function () {
       chairObj.group.rotation.y = angle;
       chairsGroup.add(chairObj.group);
 
-      // 1. Table-Side Sector Highlight Mesh on the circular tabletop
+      // 1. Subtle Warm Brass Table-Side Sector Sheen on the circular tabletop
       const seatTableGroup = new THREE.Group();
       seatTableGroup.rotation.y = angle;
       chairsGroup.add(seatTableGroup);
 
-      // RingGeometry lies in XY plane; rotateX(-PI/2) puts it flat on XZ tabletop.
-      // Angle Math.PI/2 in RingGeometry corresponds to +Z (the player's side of the table).
       const sectorGeo = new THREE.RingGeometry(
-        10.5,
-        27.75,
+        11.0,
+        27.6,
         48,
         1,
         Math.PI / 2 - arcSpan / 2,
@@ -884,7 +863,7 @@ window.initJengaGame = function () {
       );
       sectorGeo.rotateX(-Math.PI / 2);
       const sectorMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(player.color),
+        color: 0xd4a359,
         transparent: true,
         opacity: 0.0,
         side: THREE.DoubleSide,
@@ -894,10 +873,10 @@ window.initJengaGame = function () {
       sectorMesh.position.y = 0.03;
       seatTableGroup.add(sectorMesh);
 
-      // Glowing outer rim arc along the player's table edge
+      // Brushed brass outer rim inlay arc along the player's table edge
       const rimArcGeo = new THREE.RingGeometry(
-        26.8,
-        27.85,
+        27.0,
+        27.75,
         48,
         1,
         Math.PI / 2 - arcSpan / 2,
@@ -905,33 +884,32 @@ window.initJengaGame = function () {
       );
       rimArcGeo.rotateX(-Math.PI / 2);
       const rimArcMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(player.color),
+        color: 0xd4a359,
         transparent: true,
         opacity: 0.0,
         side: THREE.DoubleSide,
         depthWrite: false
       });
       const rimArcMesh = new THREE.Mesh(rimArcGeo, rimArcMat);
-      rimArcMesh.position.y = 0.06;
+      rimArcMesh.position.y = 0.05;
       seatTableGroup.add(rimArcMesh);
 
-      // 2. Tabletop Turn Nameplate Plaque on the player's side of the table
-      const plaqueGeo = new THREE.PlaneGeometry(11.5, 2.5);
-      plaqueGeo.rotateX(-Math.PI / 2.25); // Tilted slightly up for easy reading
+      // 2. Engraved Tabletop Turn Nameplate Plaque on the player's side of the table
+      const plaqueGeo = new THREE.PlaneGeometry(11.2, 2.3);
+      plaqueGeo.rotateX(-Math.PI / 2.25);
       const plaqueMat = new THREE.MeshBasicMaterial({
         map: createTurnPlaqueTexture(player.name, player.color, i === state.currentPlayerIdx),
         transparent: true,
         depthWrite: false
       });
       const plaqueMesh = new THREE.Mesh(plaqueGeo, plaqueMat);
-      plaqueMesh.position.set(0, 0.35, 24.4);
+      plaqueMesh.position.set(0, 0.32, 24.4);
       seatTableGroup.add(plaqueMesh);
 
-      // 3. Friendly 3D Open Palm Hand resting on the player's side of the table
-      const handObj = createOpenPalmHandMesh(player.color);
-      // Positioned naturally on the right-hand side of the player's table zone, open palm on the table
+      // 3. Realistic 3D Open Palm Hand resting on the player's side of the table
+      const handObj = createOpenPalmHandMesh();
       handObj.group.position.set(6.8, 0.02, 20.6);
-      handObj.group.rotation.y = 0.24; // Angled slightly inward toward the tower
+      handObj.group.rotation.y = 0.24;
       seatTableGroup.add(handObj.group);
 
       chairObjects.push({
@@ -962,22 +940,20 @@ window.initJengaGame = function () {
       const angle = (idx * 2 * Math.PI) / count;
       const radius = isTurn ? 37.8 : 41.8;
       c.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-      c.cushion.material.emissive.setHex(isTurn ? 0x261505 : 0x000000);
+      c.cushion.material.emissive.setHex(isTurn ? 0x1a1006 : 0x000000);
 
-      // Highlight the active player's side of the circular table
-      c.sectorMat.opacity = isTurn ? 0.24 : 0.0;
-      c.rimArcMat.opacity = isTurn ? 0.88 : 0.14;
+      // Subtle warm brass sheen on the active player's side of the circular table
+      c.sectorMat.opacity = isTurn ? 0.1 : 0.0;
+      c.rimArcMat.opacity = isTurn ? 0.65 : 0.12;
 
-      // Update nameplate texture for active vs waiting player
       if (c.plaqueMat.map) c.plaqueMat.map.dispose();
       c.plaqueMat.map = createTurnPlaqueTexture(c.player.name, c.player.color, isTurn);
       c.plaqueMat.needsUpdate = true;
 
-      // Show the open palm hand resting on the table for the player whose turn it is!
       c.handObj.group.visible = isTurn;
 
       if (isTurn) {
-        activeSeatLight.color.set(c.player.color);
+        activeSeatLight.color.setHex(0xffe2b8);
         activeSeatLight.position.set(
           Math.sin(angle) * 23,
           11,
@@ -1025,20 +1001,20 @@ window.initJengaGame = function () {
     };
   });
 
-  // Top Placement Ghost Slots (3 interactive slots on the topmost layer)
+  // Top Placement Ghost Slots (3 subtle architectural wireframe guides on the topmost layer)
   const ghostSlotsGroup = new THREE.Group();
   scene.add(ghostSlotsGroup);
   const ghostSlotMeshes = [];
 
   const ghostMatBase = new THREE.MeshBasicMaterial({
-    color: 0xe59838,
+    color: 0xd4a359,
     transparent: true,
-    opacity: 0.28
+    opacity: 0.18
   });
   const ghostMatHover = new THREE.MeshBasicMaterial({
-    color: 0x4cd97b,
+    color: 0xf2dfb8,
     transparent: true,
-    opacity: 0.52
+    opacity: 0.36
   });
 
   for (let i = 0; i < 3; i++) {
@@ -1050,7 +1026,7 @@ window.initJengaGame = function () {
     const edges = new THREE.EdgesGeometry(slotGeo);
     const line = new THREE.LineSegments(
       edges,
-      new THREE.LineBasicMaterial({ color: 0xffd596 })
+      new THREE.LineBasicMaterial({ color: 0xe8c996, transparent: true, opacity: 0.75 })
     );
     slotMesh.add(line);
 
@@ -1058,16 +1034,16 @@ window.initJengaGame = function () {
     ghostSlotMeshes.push(slotMesh);
   }
 
-  // Subtle selection outline highlight mesh
+  // Subtle architectural brass selection outline mesh
   const highlightGeo = new THREE.BoxGeometry(
-    BLOCK_WIDTH + 0.08,
-    BLOCK_HEIGHT + 0.08,
-    BLOCK_LENGTH + 0.08
+    BLOCK_WIDTH + 0.06,
+    BLOCK_HEIGHT + 0.06,
+    BLOCK_LENGTH + 0.06
   );
   const highlightEdges = new THREE.EdgesGeometry(highlightGeo);
   const highlightLine = new THREE.LineSegments(
     highlightEdges,
-    new THREE.LineBasicMaterial({ color: 0x4cd97b, transparent: true, opacity: 0.85 })
+    new THREE.LineBasicMaterial({ color: 0xf0d4a4, transparent: true, opacity: 0.78 })
   );
   highlightLine.visible = false;
   scene.add(highlightLine);
@@ -1738,7 +1714,7 @@ window.initJengaGame = function () {
       (state.currentPlayerIdx - 1 + state.players.length) % state.players.length;
     const winner = state.players[winnerIdx];
 
-    showToast(`😱 Oh! ${loser.name} broke the tower!`);
+    showToast(`Oh! ${loser.name} collapsed the tower.`);
     updateHUD();
 
     setTimeout(() => {
@@ -1747,14 +1723,14 @@ window.initJengaGame = function () {
       const desc = document.getElementById('gameover-desc');
 
       if (state.players.length === 1) {
-        title.textContent = 'Oh! Tower Collapsed!';
+        title.textContent = 'Oh! Tower Collapsed';
         desc.textContent = `You stacked the tower to ${
           state.towerPeakLayer + 1
-        } stories (${state.blocksMovedTotal} blocks moved) before it tumbled!`;
+        } stories (${state.blocksMovedTotal} blocks moved) before it tumbled.`;
       } else {
         // Play "Yey!" victory celebration sound + fanfare + applause for the winner!
         window.JengaAudio.playWinYey();
-        title.textContent = `🎉 Yey! ${winner.name} Wins!`;
+        title.textContent = `Yey! ${winner.name} Wins`;
         desc.textContent = `Oh! The tower collapsed on ${loser.name}'s turn at ${
           state.towerPeakLayer + 1
         } stories high (${state.blocksMovedTotal} successful moves).`;
@@ -1793,7 +1769,7 @@ window.initJengaGame = function () {
         ? 'Loose (Easy Pull)'
         : block.tension === 'medium'
         ? 'Snug (Moderate Friction)'
-        : 'Tight (Load-Bearing!)';
+        : 'Tight (Load-Bearing)';
 
     const slotName =
       block.slot === 1 ? 'Center' : block.slot === 0 ? 'Left' : 'Right';
@@ -1821,8 +1797,8 @@ window.initJengaGame = function () {
       elCoachBadge.textContent = 'STEP 1 • EXTRACT';
       elCoachText.textContent =
         state.interactionMode === 'orbit'
-          ? '360° View Mode active: Drag anywhere to spin around the table & chairs. Tap "🖐️ Pull" to slide a block!'
-          : 'Drag any block below the top completed row along its length. Choose a View Angle or orbit 360°!';
+          ? '360° Orbit Mode active: Drag anywhere to spin around the table. Select "Pull Block" to slide a block.'
+          : 'Drag any block below the top completed row along its length. Select a Camera View or orbit 360°.';
     } else if (state.turnPhase === 'PULLING') {
       elTurnPhaseText.textContent = 'Sliding block out...';
       elCoachBadge.textContent = 'PULLING BLOCK';
@@ -1832,16 +1808,16 @@ window.initJengaGame = function () {
       elTurnPhaseText.textContent = 'Step 2: Stack on top layer';
       elCoachBadge.textContent = 'STEP 2 • STACK ON TOP';
       elCoachText.textContent =
-        'Tap one of the 3 glowing slots on top of the tower (or use the slot buttons) to place your block.';
+        'Tap one of the 3 wireframe slots on top of the tower (or use the slot buttons) to place your block.';
     } else if (state.turnPhase === 'SETTLING') {
       elTurnPhaseText.textContent = 'Checking tower stability...';
-      elCoachBadge.textContent = 'HOLD BREATH...';
+      elCoachBadge.textContent = 'SETTLING';
       elCoachText.textContent =
-        'Verifying the tower holds steady before advancing to the next chair...';
+        'Verifying the tower holds steady before advancing to the next seat...';
     } else if (state.turnPhase === 'GAMEOVER') {
-      elTurnPhaseText.textContent = 'Tower Collapsed!';
+      elTurnPhaseText.textContent = 'Tower Collapsed';
       elCoachBadge.textContent = 'GAME OVER';
-      elCoachText.textContent = 'Tap "Reset" to stack a fresh 54-block tower!';
+      elCoachText.textContent = 'Select "Reset" to stack a fresh 54-block tower.';
     }
 
     elPlayerList.innerHTML = '';
@@ -1855,7 +1831,7 @@ window.initJengaGame = function () {
       row.innerHTML = `
         <div class="player-row-left">
           <span class="player-Color-pip" style="background:${p.color}"></span>
-          <span>🪑 ${p.name}</span>
+          <span>${p.name}</span>
         </div>
         <span class="player-moves">${p.moves} moves</span>
       `;
@@ -1863,7 +1839,7 @@ window.initJengaGame = function () {
         const seatRad =
           (idx * 2 * Math.PI) / state.players.length + 0.12;
         applyCameraViewStyle('seat', seatRad, false);
-        showToast(`🪑 Viewing from ${p.name}'s chair`);
+        showToast(`Camera aligned to ${p.name}'s seat`);
       });
       elPlayerList.appendChild(row);
     });
@@ -1937,7 +1913,7 @@ window.initJengaGame = function () {
 
   /**
    * Switches between the 5 curated tabletop camera view angle styles:
-   * - 'iso'  : 45° 3/4 Corner Isometric View (see 2 perpendicular tower faces at once)
+   * - 'iso'  : 45° Corner Isometric View (see 2 perpendicular tower faces at once)
    * - 'seat' : Active Player's Chair POV (looking across their highlighted table edge & hand)
    * - 'eye'  : Close-up Horizontal Eye-Level Inspection View (surgical block pulling)
    * - 'top'  : Overhead Top-Stack View (bird's-eye angle for top 3 placement slots)
@@ -1969,7 +1945,6 @@ window.initJengaGame = function () {
     let targetY = 13.0;
 
     if (styleName === 'iso') {
-      // Snap to nearest 45° diagonal corner (45°, 135°, 225°, 315°) so two faces are visible
       if (customAzimuthRad === null) {
         const cornerDeg = (Math.floor(((currentDeg + 45) % 360) / 90) * 90 + 45) % 360;
         rad = THREE.MathUtils.degToRad(cornerDeg);
@@ -1978,7 +1953,6 @@ window.initJengaGame = function () {
       camY = midY + 9.5;
       targetY = midY;
     } else if (styleName === 'seat') {
-      // Swing directly behind the active player's chair & swagger hand
       if (customAzimuthRad === null) {
         rad =
           (state.currentPlayerIdx * 2 * Math.PI) / state.players.length + 0.12;
@@ -1987,17 +1961,14 @@ window.initJengaGame = function () {
       camY = 18.8;
       targetY = 11.2;
     } else if (styleName === 'eye') {
-      // Close-up horizontal eye-level view for inspecting gaps & sliding blocks
       radiusXZ = baseDist * 0.68;
       camY = midY;
       targetY = midY - 0.2;
     } else if (styleName === 'top') {
-      // High overhead view centered on the top 3 placement slots
       radiusXZ = 15.5;
       camY = topY + 19.5;
       targetY = Math.max(12, topY - 1.5);
     } else if (styleName === 'wide') {
-      // Wide cinematic parlor room view showing all chairs & circular table
       radiusXZ = baseDist * 1.36;
       camY = 28.5;
       targetY = 9.5;
@@ -2033,11 +2004,11 @@ window.initJengaGame = function () {
       state.autoCam = !state.autoCam;
       btnAutoCam.classList.toggle('active', state.autoCam);
       btnAutoCam.textContent = state.autoCam
-        ? '✨ Auto-Angle: ON'
-        : '✨ Auto-Angle: OFF';
+        ? 'Auto-Cam: ON'
+        : 'Auto-Cam: OFF';
       showToast(
         state.autoCam
-          ? '✨ Auto-Angle ON: Camera glides to Top Stack & Player Seats automatically'
+          ? 'Auto-Cam ON: Camera frames Top Stack and Player Seats automatically'
           : 'Camera set to Manual Control'
       );
     });
@@ -2053,7 +2024,6 @@ window.initJengaGame = function () {
     setCameraAzimuthDeg(nextDeg, true);
   });
 
-  // Clicking the compass readout snaps to the next 90° cardinal face of the tower
   elCompassReadout.addEventListener('click', () => {
     const nextCardinal = (Math.floor((getCameraAzimuthDeg() + 15) / 90) * 90 + 90) % 360;
     setCameraAzimuthDeg(nextCardinal, true);
@@ -2064,7 +2034,7 @@ window.initJengaGame = function () {
     setCameraAzimuthDeg(deg, false);
   });
 
-  // Touch Mode Toggle (🖐️ Pull vs 🔄 360° View)
+  // Touch Mode Toggle (Pull Block vs 360° Orbit)
   const btnModePull = document.getElementById('mode-btn-pull');
   const btnModeOrbit = document.getElementById('mode-btn-orbit');
 
@@ -2091,10 +2061,10 @@ window.initJengaGame = function () {
 
   document.getElementById('btn-sound').addEventListener('click', () => {
     const on = window.JengaAudio.toggle();
-    document.getElementById('sound-icon').textContent = on ? '🔊' : '🔇';
+    document.getElementById('sound-icon').textContent = on ? '♪' : '×';
     document.getElementById('sound-label').textContent = on
-      ? 'Sound: ON'
-      : 'Sound: OFF';
+      ? 'Audio: ON'
+      : 'Audio: OFF';
   });
 
   function applyLightingTheme(isDay) {
@@ -2103,7 +2073,7 @@ window.initJengaGame = function () {
 
     const themeIcon = document.getElementById('theme-icon');
     const themeLabel = document.getElementById('theme-label');
-    if (themeIcon) themeIcon.textContent = isDay ? '☀️' : '🌙';
+    if (themeIcon) themeIcon.textContent = isDay ? '○' : '◐';
     if (themeLabel) themeLabel.textContent = isDay ? 'Day' : 'Night';
 
     if (isDay) {
@@ -2164,8 +2134,8 @@ window.initJengaGame = function () {
       window.JengaAudio.playWoodTap(0.5);
       showToast(
         state.isDayMode
-          ? '☀️ Switched to Sunny Day Mode'
-          : '🌙 Switched to Cozy Night Parlor Mode'
+          ? 'Switched to Daylight Parlor Mode'
+          : 'Switched to Evening Parlor Mode'
       );
     });
   }
@@ -2186,7 +2156,7 @@ window.initJengaGame = function () {
     const seed = Math.floor(Math.random() * 1000000);
     buildTower(seed);
     broadcastMove({ type: 'RESET_TOWER', seed });
-    showToast('New 54-block tower stacked!');
+    showToast('New 54-block tower stacked.');
   });
 
   document.getElementById('btn-play-again').addEventListener('click', () => {
@@ -2229,7 +2199,8 @@ window.initJengaGame = function () {
     const p4Input = document.getElementById('input-p4');
     const p4 = p4Input ? p4Input.value.trim() : '';
 
-    const colors = ['#e59838', '#4cd97b', '#5ca8ff', '#e066ff'];
+    // Authentic parlor leather upholstery tones (Cognac, Hunter Green, Slate Navy, Oxblood)
+    const colors = ['#b87339', '#3d6b52', '#466482', '#823c3c'];
     const names = [p1];
     if (p2) names.push(p2);
     if (p3) names.push(p3);
@@ -2247,7 +2218,7 @@ window.initJengaGame = function () {
     showToast(
       `Seated ${state.players.length} ${
         state.players.length === 1 ? 'player' : 'players'
-      } around the table!`
+      } around the table.`
     );
   });
 
@@ -2297,20 +2268,20 @@ window.initJengaGame = function () {
 
     if (isHost) {
       state.players = [
-        { name: guestName || 'Host Player', color: '#e59838', moves: 0 },
-        { name: 'Waiting for Opponent...', color: '#4cd97b', moves: 0 }
+        { name: guestName || 'Host Player', color: '#b87339', moves: 0 },
+        { name: 'Waiting for Opponent...', color: '#3d6b52', moves: 0 }
       ];
       buildTower(12345);
-      showToast(`Room ${code} created! Open another tab or share code.`);
+      showToast(`Room ${code} created. Open another tab or share code.`);
     } else {
       state.players = [
-        { name: 'Host Player', color: '#e59838', moves: 0 },
-        { name: guestName || 'Challenger', color: '#4cd97b', moves: 0 }
+        { name: 'Host Player', color: '#b87339', moves: 0 },
+        { name: guestName || 'Challenger', color: '#3d6b52', moves: 0 }
       ];
       buildTower(12345);
       broadcastMove({ type: 'PLAYER_JOINED', name: guestName || 'Challenger' });
       lobbyModal.classList.remove('open');
-      showToast(`Joined Room ${code}!`);
+      showToast(`Joined Room ${code}.`);
     }
     updateHUD();
   }
@@ -2331,7 +2302,7 @@ window.initJengaGame = function () {
     if (msg.type === 'PLAYER_JOINED' && state.isHost) {
       state.players[1].name = msg.name;
       updateHUD();
-      showToast(`${msg.name} took a seat at the table!`);
+      showToast(`${msg.name} took a seat at the table.`);
       lobbyModal.classList.remove('open');
     } else if (msg.type === 'MOVE_COMPLETE') {
       const block = blocks.find((b) => b.id === msg.blockId);
@@ -2345,7 +2316,7 @@ window.initJengaGame = function () {
       state.currentPlayerIdx = 0;
       state.blocksMovedTotal = 0;
       buildTower(msg.seed);
-      showToast('Opponent reset the tower!');
+      showToast('Opponent reset the tower.');
     }
   }
 
@@ -2370,7 +2341,7 @@ window.initJengaGame = function () {
       .value.trim()
       .toUpperCase();
     if (code.length < 4) {
-      showToast('Enter a valid room code first!');
+      showToast('Enter a valid room code first.');
       return;
     }
     setupRoomChannel(code, nickname, false);
@@ -2418,12 +2389,12 @@ window.initJengaGame = function () {
       checkTowerCollapse();
     }
 
-    // Gentle friendly pulse on the active player's table side & "Swag" finger-drumming hand
+    // Subtle warm brass table sheen & realistic finger-drumming hand on active player's turn
     const activeChair = chairObjects[state.currentPlayerIdx];
     if (activeChair) {
-      const pulse = 0.5 + 0.5 * Math.sin(now * 0.004);
-      activeChair.sectorMat.opacity = 0.16 + pulse * 0.14;
-      activeChair.rimArcMat.opacity = 0.65 + pulse * 0.32;
+      const pulse = 0.5 + 0.5 * Math.sin(now * 0.0035);
+      activeChair.sectorMat.opacity = 0.06 + pulse * 0.06;
+      activeChair.rimArcMat.opacity = 0.48 + pulse * 0.24;
 
       if (activeChair.handObj && activeChair.handObj.group.visible) {
         const beatTime = now * 0.0075;
