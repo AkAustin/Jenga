@@ -110,8 +110,31 @@
   <!-- Toast Notification Area -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- Bottom HUD: 360° Turntable Controls, Touch Mode Switch & Turn Coach -->
+  <!-- Bottom HUD: Camera View Angle Styles, 360° Turntable Controls, Touch Mode Switch & Turn Coach -->
   <footer class="hud-bottom">
+    <!-- Camera View Angle Style Presets (Best-in-Class Tabletop Camera Switcher) -->
+    <div class="view-angle-dock" aria-label="Camera View Angle Styles">
+      <span class="view-dock-label">🎥 View Angle:</span>
+      <button class="view-style-btn active" data-view-style="iso" title="Classic 45° Corner Isometric View — see two sides of the tower at once">
+        📐 3/4 Corner
+      </button>
+      <button class="view-style-btn" data-view-style="seat" title="Active Player's Chair POV — view over your highlighted table edge &amp; hand">
+        🪑 Player Seat
+      </button>
+      <button class="view-style-btn" data-view-style="eye" title="Close-up Horizontal Eye-Level View — precision block pulling">
+        🔍 Eye-Level
+      </button>
+      <button id="cam-top" class="view-style-btn" data-view-style="top" title="Overhead Top-Down View — effortless top-layer stacking">
+        🦅 Top Stack
+      </button>
+      <button class="view-style-btn" data-view-style="wide" title="Wide Parlor Room View — see all chairs &amp; circular table">
+        🏛️ Wide Table
+      </button>
+      <button id="btn-auto-cam" class="view-auto-pill active" title="Automatically glide camera to Top View when stacking and to the active player's seat on turn change">
+        ✨ Auto-Angle: ON
+      </button>
+    </div>
+
     <div class="bottom-row-main">
       <!-- 360° Camera Turntable Controls -->
       <div class="orbit-360-panel">
@@ -119,11 +142,10 @@
 
         <div class="orbit-slider-wrap" title="Drag to spin 360° around all 4 sides of the tower">
           <input id="orbit-slider" class="orbit-slider" type="range" min="0" max="360" value="45" />
-          <span id="compass-readout" class="compass-readout">45° NE</span>
+          <span id="compass-readout" class="compass-readout" title="Click to snap to next 90° tower face">45° NE</span>
         </div>
 
         <button id="cam-rot-right" class="btn" title="Rotate 45° Right around Tower">↻ 45°</button>
-        <button id="cam-top" class="btn" title="Toggle Top-Down / Eye-Level View">⬆️ Top</button>
 
         <!-- Touch Mode Switch (Especially helpful on Mobile/Tablet) -->
         <div class="touch-mode-toggle" title="Switch 1-finger action between Pulling Blocks and 360° Camera Orbit">
@@ -136,7 +158,7 @@
       <div class="action-coach">
         <span id="coach-badge" class="coach-step-badge">STEP 1 • EXTRACT</span>
         <span id="coach-text" class="coach-text">
-          Drag any block below the top completed row along its length. Orbit 360° to see all sides &amp; player chairs!
+          Drag any block below the top completed row along its length. Choose a View Angle or orbit 360°!
         </span>
         <div id="slot-picker" class="slot-picker">
           <button class="btn btn-primary" data-slot="0">Left Slot</button>

@@ -36,6 +36,9 @@ window.initJengaGame = function () {
     committedBlock: null,
     towerPeakLayer: INITIAL_LAYERS - 1,
     isTopView: false,
+    viewStyle: 'iso', // 'iso' | 'seat' | 'eye' | 'top' | 'wide'
+    savedPreStackViewStyle: 'iso',
+    autoCam: true,
     isDayMode: false,
     roomCode: null,
     isHost: true,
@@ -1543,6 +1546,12 @@ window.initJengaGame = function () {
     syncMeshToBody(block.mesh, block.body);
 
     showGhostSlots(targetLayer);
+    if (state.autoCam) {
+      if (state.viewStyle !== 'top') {
+        state.savedPreStackViewStyle = state.viewStyle;
+      }
+      applyCameraViewStyle('top', null, true);
+    }
     updateHUD();
   }
 
@@ -1654,6 +1663,17 @@ window.initJengaGame = function () {
     state.committedBlock = null;
     state.turnPhase = 'SELECT';
     highlightActivePlayerChair();
+    if (state.autoCam) {
+      // Smoothly glide camera around the circular table to the active player's seat POV
+      const nextStyle =
+        state.savedPreStackViewStyle === 'eye' ||
+        state.savedPreStackViewStyle === 'wide'
+          ? state.savedPreStackViewStyle
+          : 'seat';
+      const seatRad =
+        (state.currentPlayerIdx * 2 * Math.PI) / state.players.length + 0.12;
+      applyCameraViewStyle(nextStyle, seatRad, true);
+    }
     updateHUD();
   }
 
@@ -1802,7 +1822,7 @@ window.initJengaGame = function () {
       elCoachText.textContent =
         state.interactionMode === 'orbit'
           ? '360° View Mode active: Drag anywhere to spin around the table & chairs. Tap "🖐️ Pull" to slide a block!'
-          : 'Drag any block below the top completed row along its length. Orbit 360° to see all sides & player chairs!';
+          : 'Drag any block below the top completed row along its length. Choose a View Angle or orbit 360°!';
     } else if (state.turnPhase === 'PULLING') {
       elTurnPhaseText.textContent = 'Sliding block out...';
       elCoachBadge.textContent = 'PULLING BLOCK';
@@ -1830,6 +1850,8 @@ window.initJengaGame = function () {
       row.className = `player-row ${
         idx === state.currentPlayerIdx ? 'active' : ''
       }`;
+      row.style.cursor = 'pointer';
+      row.title = `Click to view from ${p.name}'s chair angle`;
       row.innerHTML = `
         <div class="player-row-left">
           <span class="player-Color-pip" style="background:${p.color}"></span>
@@ -1837,6 +1859,12 @@ window.initJengaGame = function () {
         </div>
         <span class="player-moves">${p.moves} moves</span>
       `;
+      row.addEventListener('click', () => {
+        const seatRad =
+          (idx * 2 * Math.PI) / state.players.length + 0.12;
+        applyCameraViewStyle('seat', seatRad, false);
+        showToast(`🪑 Viewing from ${p.name}'s chair`);
+      });
       elPlayerList.appendChild(row);
     });
   }
@@ -1851,7 +1879,9 @@ window.initJengaGame = function () {
     }, 3000);
   }
 
-  // 360° Camera Orbit Controls & Compass Synchronization
+  // ============================================================================
+  // CAMERA VIEW ANGLE STUDIO (5 CURATED STYLES + 360° TURNTABLE + AUTO-CAM)
+  // ============================================================================
   function getCameraAzimuthDeg() {
     const offset = camera.position.clone().sub(controls.target);
     let rad = Math.atan2(offset.x, offset.z);
@@ -1888,14 +1918,14 @@ window.initJengaGame = function () {
     elCompassReadout.textContent = `${deg}° ${dirs[dirIdx]}`;
   }
 
-  function animateCameraTo(pos, targetPos) {
+  function animateCameraTo(pos, targetPos, duration = 420) {
     const startPos = camera.position.clone();
     const startTarget = controls.target.clone();
-    const duration = 340;
     const startTime = performance.now();
 
     function step(now) {
       const t = Math.min(1, (now - startTime) / duration);
+      // Smooth cubic ease-out for cinematic tabletop camera movement
       const ease = 1 - Math.pow(1 - t, 3);
       camera.position.lerpVectors(startPos, pos, ease);
       controls.target.lerpVectors(startTarget, targetPos, ease);
@@ -1903,6 +1933,114 @@ window.initJengaGame = function () {
       if (t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
+  }
+
+  /**
+   * Switches between the 5 curated tabletop camera view angle styles:
+   * - 'iso'  : 45° 3/4 Corner Isometric View (see 2 perpendicular tower faces at once)
+   * - 'seat' : Active Player's Chair POV (looking across their highlighted table edge & hand)
+   * - 'eye'  : Close-up Horizontal Eye-Level Inspection View (surgical block pulling)
+   * - 'top'  : Overhead Top-Stack View (bird's-eye angle for top 3 placement slots)
+   * - 'wide' : Wide Parlor Table View (full circular table, chairs, and parlor surround)
+   */
+  function applyCameraViewStyle(styleName, customAzimuthRad = null, silent = false) {
+    state.viewStyle = styleName;
+    state.isTopView = styleName === 'top';
+
+    document.querySelectorAll('.view-style-btn').forEach((btn) => {
+      btn.classList.toggle(
+        'active',
+        btn.getAttribute('data-view-style') === styleName
+      );
+    });
+
+    const baseDist = getIdealCameraDistance();
+    const currentDeg = getCameraAzimuthDeg();
+    let rad =
+      customAzimuthRad !== null
+        ? customAzimuthRad
+        : THREE.MathUtils.degToRad(currentDeg);
+
+    const topY = (state.towerPeakLayer + 1) * BLOCK_HEIGHT;
+    const midY = Math.max(11.5, topY * 0.48);
+
+    let radiusXZ = baseDist;
+    let camY = 22;
+    let targetY = 13.0;
+
+    if (styleName === 'iso') {
+      // Snap to nearest 45° diagonal corner (45°, 135°, 225°, 315°) so two faces are visible
+      if (customAzimuthRad === null) {
+        const cornerDeg = (Math.floor(((currentDeg + 45) % 360) / 90) * 90 + 45) % 360;
+        rad = THREE.MathUtils.degToRad(cornerDeg);
+      }
+      radiusXZ = baseDist * 0.96;
+      camY = midY + 9.5;
+      targetY = midY;
+    } else if (styleName === 'seat') {
+      // Swing directly behind the active player's chair & swagger hand
+      if (customAzimuthRad === null) {
+        rad =
+          (state.currentPlayerIdx * 2 * Math.PI) / state.players.length + 0.12;
+      }
+      radiusXZ = baseDist * 0.92;
+      camY = 18.8;
+      targetY = 11.2;
+    } else if (styleName === 'eye') {
+      // Close-up horizontal eye-level view for inspecting gaps & sliding blocks
+      radiusXZ = baseDist * 0.68;
+      camY = midY;
+      targetY = midY - 0.2;
+    } else if (styleName === 'top') {
+      // High overhead view centered on the top 3 placement slots
+      radiusXZ = 15.5;
+      camY = topY + 19.5;
+      targetY = Math.max(12, topY - 1.5);
+    } else if (styleName === 'wide') {
+      // Wide cinematic parlor room view showing all chairs & circular table
+      radiusXZ = baseDist * 1.36;
+      camY = 28.5;
+      targetY = 9.5;
+    }
+
+    const targetPos = new THREE.Vector3(
+      radiusXZ * Math.sin(rad),
+      camY,
+      radiusXZ * Math.cos(rad)
+    );
+    const lookTarget = new THREE.Vector3(0, targetY, 0);
+
+    animateCameraTo(targetPos, lookTarget, 440);
+
+    if (!silent) {
+      window.JengaAudio.playWoodTap(0.45, 0.14);
+    }
+  }
+
+  document.querySelectorAll('.view-style-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const styleName = btn.getAttribute('data-view-style');
+      if (styleName !== 'top') {
+        state.savedPreStackViewStyle = styleName;
+      }
+      applyCameraViewStyle(styleName, null, false);
+    });
+  });
+
+  const btnAutoCam = document.getElementById('btn-auto-cam');
+  if (btnAutoCam) {
+    btnAutoCam.addEventListener('click', () => {
+      state.autoCam = !state.autoCam;
+      btnAutoCam.classList.toggle('active', state.autoCam);
+      btnAutoCam.textContent = state.autoCam
+        ? '✨ Auto-Angle: ON'
+        : '✨ Auto-Angle: OFF';
+      showToast(
+        state.autoCam
+          ? '✨ Auto-Angle ON: Camera glides to Top Stack & Player Seats automatically'
+          : 'Camera set to Manual Control'
+      );
+    });
   }
 
   document.getElementById('cam-rot-left').addEventListener('click', () => {
@@ -1915,31 +2053,15 @@ window.initJengaGame = function () {
     setCameraAzimuthDeg(nextDeg, true);
   });
 
+  // Clicking the compass readout snaps to the next 90° cardinal face of the tower
+  elCompassReadout.addEventListener('click', () => {
+    const nextCardinal = (Math.floor((getCameraAzimuthDeg() + 15) / 90) * 90 + 90) % 360;
+    setCameraAzimuthDeg(nextCardinal, true);
+  });
+
   elOrbitSlider.addEventListener('input', (e) => {
     const deg = parseInt(e.target.value, 10) || 0;
     setCameraAzimuthDeg(deg, false);
-  });
-
-  document.getElementById('cam-top').addEventListener('click', (e) => {
-    state.isTopView = !state.isTopView;
-    const deg = getCameraAzimuthDeg();
-    const rad = THREE.MathUtils.degToRad(deg);
-    const topY = (state.towerPeakLayer + 1) * BLOCK_HEIGHT;
-
-    if (state.isTopView) {
-      e.currentTarget.classList.add('btn-primary');
-      animateCameraTo(
-        new THREE.Vector3(16 * Math.sin(rad), topY + 18, 16 * Math.cos(rad)),
-        new THREE.Vector3(0, Math.max(12, topY - 2), 0)
-      );
-    } else {
-      e.currentTarget.classList.remove('btn-primary');
-      const dist = getIdealCameraDistance();
-      animateCameraTo(
-        new THREE.Vector3(dist * Math.sin(rad), 20, dist * Math.cos(rad)),
-        new THREE.Vector3(0, 13.0, 0)
-      );
-    }
   });
 
   // Touch Mode Toggle (🖐️ Pull vs 🔄 360° View)
