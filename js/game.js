@@ -1692,6 +1692,12 @@ window.initJengaGame = function () {
       elStabilityText.textContent = 'Shifting Weight...';
     } else {
       elStabilityText.textContent = 'CRITICAL TILT!';
+      // Start the stretched "Ohhhhhhhhhhhhhhh!" vocal reaction as soon as the tower begins tipping
+      window.JengaAudio.playBreakOh(2.35);
+    }
+
+    if (fallenCount === 1) {
+      window.JengaAudio.playBreakOh(2.35);
     }
 
     if (fallenCount >= 2) {
@@ -1706,7 +1712,7 @@ window.initJengaGame = function () {
     controls.enabled = true;
     hideGhostSlots();
 
-    // Plays "Oh!" vocal reaction + collapsing wood blocks clatter
+    // Plays stretched "Ohhhhhhhhhhhhhhh!" vocal reaction + collapsing wood blocks clatter
     window.JengaAudio.playTowerCollapse();
 
     const loser = state.players[state.currentPlayerIdx];
@@ -1714,7 +1720,7 @@ window.initJengaGame = function () {
       (state.currentPlayerIdx - 1 + state.players.length) % state.players.length;
     const winner = state.players[winnerIdx];
 
-    showToast(`Oh! ${loser.name} collapsed the tower.`);
+    showToast(`Ohhhhhhhhhhhhhhh! ${loser.name} collapsed the tower.`);
     updateHUD();
 
     setTimeout(() => {
@@ -1723,7 +1729,7 @@ window.initJengaGame = function () {
       const desc = document.getElementById('gameover-desc');
 
       if (state.players.length === 1) {
-        title.textContent = 'Oh! Tower Collapsed';
+        title.textContent = 'Ohhhhhhhhhhhhhhh! Tower Collapsed';
         desc.textContent = `You stacked the tower to ${
           state.towerPeakLayer + 1
         } stories (${state.blocksMovedTotal} blocks moved) before it tumbled.`;
@@ -1731,12 +1737,12 @@ window.initJengaGame = function () {
         // Play "Yey!" victory celebration sound + fanfare + applause for the winner!
         window.JengaAudio.playWinYey();
         title.textContent = `Yey! ${winner.name} Wins`;
-        desc.textContent = `Oh! The tower collapsed on ${loser.name}'s turn at ${
+        desc.textContent = `Ohhhhhhhhhhhhhhh! The tower collapsed on ${loser.name}'s turn at ${
           state.towerPeakLayer + 1
         } stories high (${state.blocksMovedTotal} successful moves).`;
       }
       modal.classList.add('open');
-    }, 1150);
+    }, 2050);
   }
 
   // UI & HUD Updates

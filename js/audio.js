@@ -142,46 +142,73 @@ class SoundEngine {
   }
 
   /**
-   * Expressive vocal "Oh!" sound when someone breaks the tower!
-   * Uses formant synthesis (vowel "O-o-h" F1=450Hz, F2=800Hz with falling pitch)
-   * layered with Web Speech utterance for a lively parlor reaction.
+   * Long, dramatic stretched "Ohhhhhhhhhhhhhhh!" vocal reaction that spans from
+   * when the tower begins tipping/falling all the way through the final collapse (~2.4s).
+   * Uses multi-voice formant synthesis (vowel "O-o-o-h-h-h" with natural 5.5Hz vocal vibrato)
+   * layered with a slow-stretched Web Speech utterance.
    */
-  playBreakOh() {
+  playBreakOh(duration = 2.35) {
     if (!this.enabled) return;
+    const nowMs = performance.now();
+    if (this.lastOhTime && nowMs - this.lastOhTime < 2200) {
+      return; // Already stretching "Ohhhhhhhhhhhhhhh!" from the start of the fall
+    }
+    this.lastOhTime = nowMs;
+
     this.init();
     if (!this.ctx) return;
 
-    // 1. Multi-voice formant "Ohhh!" groan
-    const basePitches = [245, 295, 195, 330];
+    // 1. Multi-voice stretched formant "Ohhhhhhhhhhhhhhh!" crowd groan (~2.35s)
+    const basePitches = [235, 285, 188, 320, 155];
     basePitches.forEach((startPitch, idx) => {
-      const startOffset = idx * 0.035;
+      const startOffset = idx * 0.045;
       const now = this.ctx.currentTime + startOffset;
-      const dur = 0.78;
+      const dur = duration;
 
       const osc = this.ctx.createOscillator();
       osc.type = 'sawtooth';
-      // Expressive falling "Ohhh!" contour
-      osc.frequency.setValueAtTime(startPitch * 1.08, now);
-      osc.frequency.linearRampToValueAtTime(startPitch * 1.14, now + 0.09);
-      osc.frequency.exponentialRampToValueAtTime(startPitch * 0.62, now + dur);
 
-      // Vowel 'O' Formant 1 (~450 Hz) & Formant 2 (~820 Hz)
+      // Dramatic pitch contour: initial gasp as tower tips -> long suspended hold -> falling groan on collapse
+      osc.frequency.setValueAtTime(startPitch * 1.02, now);
+      osc.frequency.linearRampToValueAtTime(startPitch * 1.18, now + dur * 0.16);
+      osc.frequency.linearRampToValueAtTime(startPitch * 1.08, now + dur * 0.52);
+      osc.frequency.exponentialRampToValueAtTime(startPitch * 0.56, now + dur);
+
+      // Natural human vocal vibrato (5.2 - 6.0 Hz LFO) during the long "Ohhhhhhhhhhhhhhh!" stretch
+      const vibratoOsc = this.ctx.createOscillator();
+      const vibratoGain = this.ctx.createGain();
+      vibratoOsc.type = 'sine';
+      vibratoOsc.frequency.setValueAtTime(5.2 + idx * 0.25, now);
+      vibratoGain.gain.setValueAtTime(0.5, now);
+      vibratoGain.gain.linearRampToValueAtTime(startPitch * 0.028, now + dur * 0.35);
+      vibratoGain.gain.linearRampToValueAtTime(startPitch * 0.015, now + dur);
+      vibratoOsc.connect(vibratoGain);
+      vibratoGain.connect(osc.frequency);
+
+      // Vowel 'O -> Ohhh -> Ahhh' Formant 1 (~500 Hz -> 420 Hz -> 360 Hz)
       const f1 = this.ctx.createBiquadFilter();
       f1.type = 'bandpass';
-      f1.frequency.setValueAtTime(480, now);
-      f1.frequency.linearRampToValueAtTime(390, now + dur);
-      f1.Q.setValueAtTime(5.5, now);
+      f1.frequency.setValueAtTime(510, now);
+      f1.frequency.linearRampToValueAtTime(450, now + dur * 0.5);
+      f1.frequency.linearRampToValueAtTime(365, now + dur);
+      f1.Q.setValueAtTime(5.2, now);
 
+      // Formant 2 (~880 Hz -> 780 Hz -> 680 Hz)
       const f2 = this.ctx.createBiquadFilter();
       f2.type = 'bandpass';
-      f2.frequency.setValueAtTime(860, now);
-      f2.frequency.linearRampToValueAtTime(720, now + dur);
-      f2.Q.setValueAtTime(6.0, now);
+      f2.frequency.setValueAtTime(890, now);
+      f2.frequency.linearRampToValueAtTime(790, now + dur * 0.5);
+      f2.frequency.linearRampToValueAtTime(680, now + dur);
+      f2.Q.setValueAtTime(5.8, now);
 
       const gain = this.ctx.createGain();
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.09, now + 0.06);
-      gain.gain.setValueAtTime(0.08, now + 0.35);
+      // Swells in as the tower starts leaning
+      gain.gain.linearRampToValueAtTime(0.085, now + 0.12);
+      // Sustains across the fall and peaks right as the tower crashes
+      gain.gain.linearRampToValueAtTime(0.105, now + dur * 0.55);
+      gain.gain.setValueAtTime(0.09, now + dur * 0.72);
+      // Long tail fade out after collapse
       gain.gain.exponentialRampToValueAtTime(0.0008, now + dur);
 
       osc.connect(f1);
@@ -190,18 +217,20 @@ class SoundEngine {
       f2.connect(gain);
       gain.connect(this.ctx.destination);
 
+      vibratoOsc.start(now);
       osc.start(now);
-      osc.stop(now + dur + 0.02);
+      vibratoOsc.stop(now + dur + 0.04);
+      osc.stop(now + dur + 0.04);
     });
 
-    // 2. Spoken "Oh!" exclamation via SpeechSynthesis if supported
+    // 2. Stretched spoken "Ohhhhhhhhhhhhhhh!" via SpeechSynthesis if supported
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance('Oh!');
-        utter.pitch = 0.75;
-        utter.rate = 0.85;
-        utter.volume = 0.9;
+        const utter = new SpeechSynthesisUtterance('Ohhhhhhhhhhhhhhh!');
+        utter.pitch = 0.65;
+        utter.rate = 0.42; // Slow, drawn-out stretch across the fall
+        utter.volume = 0.95;
         window.speechSynthesis.speak(utter);
       } catch (_) {}
     }
@@ -318,21 +347,22 @@ class SoundEngine {
   }
 
   /**
-   * Multi-block clatter + "Oh!" gasp when the tower collapses.
+   * Multi-block clatter + stretched "Ohhhhhhhhhhhhhhh!" vocal groan as the tower falls and collapses.
    */
   playTowerCollapse() {
     if (!this.enabled) return;
     this.init();
     if (!this.ctx) return;
 
-    // Immediate "Oh!" reaction as the tower breaks
-    this.playBreakOh();
+    // Stretched "Ohhhhhhhhhhhhhhh!" reaction spanning the fall and collapse
+    this.playBreakOh(2.35);
 
-    for (let i = 0; i < 16; i++) {
-      const delay = i * 32 + Math.random() * 55;
+    // 28 staggered hardwood block impacts spanning ~2.1 seconds as the tower topples and settles
+    for (let i = 0; i < 28; i++) {
+      const delay = i * 68 + Math.random() * 55;
       setTimeout(() => {
-        const pitch = 0.65 + Math.random() * 0.85;
-        const vol = Math.max(0.08, 0.38 - i * 0.018);
+        const pitch = 0.62 + Math.random() * 0.88;
+        const vol = Math.max(0.06, 0.4 - i * 0.012);
         this.playWoodTap(pitch, vol);
       }, delay);
     }
