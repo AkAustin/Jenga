@@ -474,27 +474,102 @@ window.initJengaGame = function () {
     return { group: chair, cushion, badge };
   }
 
-  // Cached transparent CanvasTextures for the Left and Right open palms extracted from the user's image
+  // Cached transparent CanvasTextures, bump maps, and 3D height fields for Left & Right hands
   let dualPalmTextures = null;
   const pendingDualPalmMaterials = [];
+  const pendingSculptableHands = [];
 
-  function applyDualPalmTexturesToMaterialPair(leftMat, rightMat, leftShadowMat, rightShadowMat) {
+  function applyDualPalmTexturesToMaterialPair(
+    leftMat,
+    rightMat,
+    leftUnderMat,
+    rightUnderMat,
+    leftShadowMat,
+    rightShadowMat
+  ) {
     if (!dualPalmTextures) return;
-    leftMat.map = dualPalmTextures.leftTex;
-    leftMat.alphaTest = 0.05;
+    leftMat.map = dualPalmTextures.left.colorTex;
+    leftMat.bumpMap = dualPalmTextures.left.bumpTex;
+    leftMat.bumpScale = 0.28;
+    leftMat.alphaTest = 0.06;
     leftMat.needsUpdate = true;
 
-    rightMat.map = dualPalmTextures.rightTex;
-    rightMat.alphaTest = 0.05;
+    rightMat.map = dualPalmTextures.right.colorTex;
+    rightMat.bumpMap = dualPalmTextures.right.bumpTex;
+    rightMat.bumpScale = 0.28;
+    rightMat.alphaTest = 0.06;
     rightMat.needsUpdate = true;
 
+    if (leftUnderMat) {
+      leftUnderMat.map = dualPalmTextures.left.colorTex;
+      leftUnderMat.alphaTest = 0.1;
+      leftUnderMat.needsUpdate = true;
+    }
+    if (rightUnderMat) {
+      rightUnderMat.map = dualPalmTextures.right.colorTex;
+      rightUnderMat.alphaTest = 0.1;
+      rightUnderMat.needsUpdate = true;
+    }
+
     if (leftShadowMat) {
-      leftShadowMat.map = dualPalmTextures.leftTex;
+      leftShadowMat.map = dualPalmTextures.left.colorTex;
       leftShadowMat.needsUpdate = true;
     }
     if (rightShadowMat) {
-      rightShadowMat.map = dualPalmTextures.rightTex;
+      rightShadowMat.map = dualPalmTextures.right.colorTex;
       rightShadowMat.needsUpdate = true;
+    }
+  }
+
+  function applyHeightFieldToHandUnit(palmUnitData, heightData) {
+    if (!palmUnitData || !heightData) return;
+    const { geo, sliceGeos } = palmUnitData;
+    const posAttr = geo.attributes.position;
+    const uvAttr = geo.attributes.uv;
+    const basePositions = geo.userData.basePositions;
+    const { grid, gw, gh } = heightData;
+
+    function sampleHeight(u, v) {
+      // UV v=1 is top of image (fingertips), v=0 is bottom (wrist)
+      const gx = Math.max(0, Math.min(gw - 1, u * (gw - 1)));
+      const gy = Math.max(0, Math.min(gh - 1, (1 - v) * (gh - 1)));
+      const x0 = Math.floor(gx);
+      const y0 = Math.floor(gy);
+      const x1 = Math.min(gw - 1, x0 + 1);
+      const y1 = Math.min(gh - 1, y0 + 1);
+      const tx = gx - x0;
+      const ty = gy - y0;
+
+      const h00 = grid[y0 * gw + x0];
+      const h10 = grid[y0 * gw + x1];
+      const h01 = grid[y1 * gw + x0];
+      const h11 = grid[y1 * gw + x1];
+      const h0 = h00 * (1 - tx) + h10 * tx;
+      const h1 = h01 * (1 - tx) + h11 * tx;
+      return h0 * (1 - ty) + h1 * ty;
+    }
+
+    for (let k = 0; k < posAttr.count; k++) {
+      const u = uvAttr.getX(k);
+      const v = uvAttr.getY(k);
+      const h = sampleHeight(u, v);
+
+      // Give the palm/metacarpal center & wrist extra chunky 3D weight, and rounded thickness along each finger
+      const palmCenterBoost =
+        Math.exp(-Math.pow((u - 0.5) / 0.28, 2) - Math.pow((v - 0.36) / 0.26, 2)) * 0.52;
+      const sculptY = Math.pow(h, 0.72) * 0.92 + h * palmCenterBoost;
+
+      basePositions[k * 3 + 1] = sculptY;
+      posAttr.array[k * 3 + 1] = sculptY;
+    }
+
+    posAttr.needsUpdate = true;
+    geo.computeVertexNormals();
+
+    if (sliceGeos) {
+      sliceGeos.forEach((sGeo) => {
+        sGeo.userData.basePositions.set(basePositions);
+      });
     }
   }
 
@@ -520,20 +595,18 @@ window.initJengaGame = function () {
         const d = imgData.data;
 
         // Chroma-key out only the neutral white studio background while keeping pale fingernails
-        // and warm skin tones 100% opaque and vivid.
+        // and warm skin tones 100% opaque, rich, and vivid.
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i];
           const g = d[i + 1];
           const b = d[i + 2];
 
-          const warmth = r - b; // Skin and fingernails have positive red-blue warmth; white background is ~0
+          const warmth = r - b;
           const minC = Math.min(r, g, b);
 
           if (minC > 244 && warmth < 10) {
-            // Pure white background
             d[i + 3] = 0;
           } else if (minC > 228 && warmth < 18) {
-            // Smooth anti-aliased edge feathering around the fingers
             const warmAlpha = Math.max(0, (warmth - 4) / 14);
             const darkAlpha = Math.max(0, (246 - minC) / 18);
             const alpha = Math.max(0, Math.min(1, Math.max(warmAlpha, darkAlpha)));
@@ -541,19 +614,92 @@ window.initJengaGame = function () {
           } else {
             d[i + 3] = 255;
           }
+
+          // Enhance warm skin contrast slightly so knuckles & tendons show rich 3D depth
+          if (d[i + 3] > 0) {
+            d[i] = Math.min(255, Math.round(r * 0.98));
+            d[i + 1] = Math.min(255, Math.round(g * 0.94));
+            d[i + 2] = Math.min(255, Math.round(b * 0.9));
+          }
         }
         ctx.putImageData(imgData, 0, 0);
 
-        const tex = new THREE.CanvasTexture(c);
-        tex.encoding = THREE.sRGBEncoding;
-        tex.anisotropy = 4;
-        tex.needsUpdate = true;
-        return tex;
+        // Compute a smooth 64x64 3D anatomical thickness height-field from the hand's silhouette
+        const gw = 64;
+        const gh = 64;
+        let grid = new Float32Array(gw * gh);
+        const rawMask = new Float32Array(gw * gh);
+
+        for (let gy = 0; gy < gh; gy++) {
+          const py = Math.min(fullH - 1, Math.floor((gy / (gh - 1)) * fullH));
+          for (let gx = 0; gx < gw; gx++) {
+            const px = Math.min(srcW - 1, Math.floor((gx / (gw - 1)) * srcW));
+            const pIdx = (py * srcW + px) * 4;
+            const a = d[pIdx + 3] / 255;
+            rawMask[gy * gw + gx] = a > 0.2 ? 1.0 : 0.0;
+            grid[gy * gw + gx] = a;
+          }
+        }
+
+        // Multi-pass separable smoothing inside the hand mask to create a plump, rounded 3D cushion profile
+        for (let pass = 0; pass < 7; pass++) {
+          const next = new Float32Array(gw * gh);
+          for (let gy = 0; gy < gh; gy++) {
+            for (let gx = 0; gx < gw; gx++) {
+              if (rawMask[gy * gw + gx] === 0) {
+                next[gy * gw + gx] = 0;
+                continue;
+              }
+              let sum = 0;
+              let wSum = 0;
+              for (let dy = -2; dy <= 2; dy++) {
+                const ny = Math.max(0, Math.min(gh - 1, gy + dy));
+                for (let dx = -2; dx <= 2; dx++) {
+                  const nx = Math.max(0, Math.min(gw - 1, gx + dx));
+                  const w = 1 / (1 + Math.abs(dx) + Math.abs(dy));
+                  sum += grid[ny * gw + nx] * w;
+                  wSum += w;
+                }
+              }
+              next[gy * gw + gx] = Math.min(1.0, (sum / wSum) * 1.08);
+            }
+          }
+          grid = next;
+        }
+
+        // Create a 3D bump map texture from the smoothed thickness dome + skin micro-detail
+        const bumpCanvas = document.createElement('canvas');
+        bumpCanvas.width = gw;
+        bumpCanvas.height = gh;
+        const bCtx = bumpCanvas.getContext('2d');
+        const bData = bCtx.createImageData(gw, gh);
+        for (let i = 0; i < gw * gh; i++) {
+          const val = Math.max(0, Math.min(255, Math.round(Math.pow(grid[i], 0.75) * 255)));
+          bData.data[i * 4] = val;
+          bData.data[i * 4 + 1] = val;
+          bData.data[i * 4 + 2] = val;
+          bData.data[i * 4 + 3] = 255;
+        }
+        bCtx.putImageData(bData, 0, 0);
+
+        const colorTex = new THREE.CanvasTexture(c);
+        colorTex.encoding = THREE.sRGBEncoding;
+        colorTex.anisotropy = 4;
+        colorTex.needsUpdate = true;
+
+        const bumpTex = new THREE.CanvasTexture(bumpCanvas);
+        bumpTex.needsUpdate = true;
+
+        return {
+          colorTex,
+          bumpTex,
+          heightData: { grid, gw, gh }
+        };
       }
 
       dualPalmTextures = {
-        leftTex: buildSinglePalmSideTexture(0, halfW),
-        rightTex: buildSinglePalmSideTexture(halfW, fullW - halfW)
+        left: buildSinglePalmSideTexture(0, halfW),
+        right: buildSinglePalmSideTexture(halfW, fullW - halfW)
       };
 
       while (pendingDualPalmMaterials.length > 0) {
@@ -561,9 +707,17 @@ window.initJengaGame = function () {
         applyDualPalmTexturesToMaterialPair(
           item.leftMat,
           item.rightMat,
+          item.leftUnderMat,
+          item.rightUnderMat,
           item.leftShadowMat,
           item.rightShadowMat
         );
+      }
+
+      while (pendingSculptableHands.length > 0) {
+        const pair = pendingSculptableHands.pop();
+        applyHeightFieldToHandUnit(pair.leftPalm, dualPalmTextures.left.heightData);
+        applyHeightFieldToHandUnit(pair.rightPalm, dualPalmTextures.right.heightData);
       }
     };
     img.src = window.JENGA_PALMS_BASE64 || 'assets/palms.jpg';
@@ -571,8 +725,8 @@ window.initJengaGame = function () {
 
   /**
    * Builds BOTH Hands (Left & Right, palms resting down on the table) using the user's custom image,
-   * positioned on the active player's highlighted side of the circular table with subdivided
-   * finger meshes for rhythmic "swag" finger-tapping & wrist groove animation.
+   * sculpted with 3D volumetric height-field relief, bump mapping, and multi-layer extruded flesh
+   * thickness so the hands look heavy, solid, and three-dimensional from every angle.
    */
   function createOpenPalmHandMesh() {
     ensureDualPalmTexturesLoaded();
@@ -581,10 +735,10 @@ window.initJengaGame = function () {
 
     const leftMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      emissive: 0x2a1c12,
-      emissiveIntensity: 0.35,
-      roughness: 0.48,
-      metalness: 0.02,
+      emissive: 0x24150c,
+      emissiveIntensity: 0.25,
+      roughness: 0.44,
+      metalness: 0.03,
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: true
@@ -592,9 +746,32 @@ window.initJengaGame = function () {
 
     const rightMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      emissive: 0x2a1c12,
-      emissiveIntensity: 0.35,
-      roughness: 0.48,
+      emissive: 0x24150c,
+      emissiveIntensity: 0.25,
+      roughness: 0.44,
+      metalness: 0.03,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: true
+    });
+
+    // Darker warm skin sidewall material for the extruded volumetric layers underneath the hand
+    const leftUnderMat = new THREE.MeshStandardMaterial({
+      color: 0xb87e5c,
+      emissive: 0x1a0e07,
+      emissiveIntensity: 0.2,
+      roughness: 0.6,
+      metalness: 0.02,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: true
+    });
+
+    const rightUnderMat = new THREE.MeshStandardMaterial({
+      color: 0xb87e5c,
+      emissive: 0x1a0e07,
+      emissiveIntensity: 0.2,
+      roughness: 0.6,
       metalness: 0.02,
       transparent: true,
       side: THREE.DoubleSide,
@@ -602,67 +779,112 @@ window.initJengaGame = function () {
     });
 
     const leftShadowMat = new THREE.MeshBasicMaterial({
-      color: 0x080401,
+      color: 0x070301,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.48,
       depthWrite: false
     });
 
     const rightShadowMat = new THREE.MeshBasicMaterial({
-      color: 0x080401,
+      color: 0x070301,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.48,
       depthWrite: false
     });
 
     if (dualPalmTextures) {
-      applyDualPalmTexturesToMaterialPair(leftMat, rightMat, leftShadowMat, rightShadowMat);
+      applyDualPalmTexturesToMaterialPair(
+        leftMat,
+        rightMat,
+        leftUnderMat,
+        rightUnderMat,
+        leftShadowMat,
+        rightShadowMat
+      );
     } else {
-      pendingDualPalmMaterials.push({ leftMat, rightMat, leftShadowMat, rightShadowMat });
+      pendingDualPalmMaterials.push({
+        leftMat,
+        rightMat,
+        leftUnderMat,
+        rightUnderMat,
+        leftShadowMat,
+        rightShadowMat
+      });
     }
 
-    function buildSinglePalmPlane(palmMat, shadowMat, sideSign) {
+    function buildSinglePalmPlane(palmMat, underMat, shadowMat, sideSign) {
       const palmUnit = new THREE.Group();
-      // Position Left Hand (-7.2) and Right Hand (+7.2) clearly on the player's side of the circular table
-      palmUnit.position.set(sideSign * 7.2, 0.25, 20.2);
+      // Position Left Hand (-7.4) and Right Hand (+7.4) prominently on the player's side of the circular table
+      palmUnit.position.set(sideSign * 7.4, 0.18, 20.1);
       // Angle both hands naturally inward toward the Jenga tower
       palmUnit.rotation.y = sideSign * 0.18;
 
-      // Subdivided plane matching the 367x511 hand aspect ratio so fingers ripple & tap with swag!
-      const segX = 20;
-      const segY = 20;
-      const handW = 8.2;
-      const handH = 11.2;
+      // High-density 36x36 mesh so the 3D anatomical height dome & finger drumming curve smoothly
+      const segX = 36;
+      const segY = 36;
+      const handW = 9.0;
+      const handH = 11.8;
       const geo = new THREE.PlaneGeometry(handW, handH, segX, segY);
       geo.rotateX(-Math.PI / 2);
 
-      // Store base vertex coordinates so we can animate a 4-finger drumming wave
       const posAttr = geo.attributes.position;
       const basePositions = new Float32Array(posAttr.array.length);
       basePositions.set(posAttr.array);
       geo.userData.basePositions = basePositions;
 
+      // Top sculpted skin surface
       const mesh = new THREE.Mesh(geo, palmMat);
-      mesh.position.y = 0.26;
-      mesh.renderOrder = 6;
+      mesh.position.y = 0.52;
+      mesh.renderOrder = 8;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       palmUnit.add(mesh);
 
-      // Soft contact shadow directly underneath each hand on the wood tabletop
-      const shadowGeo = new THREE.PlaneGeometry(handW, handH);
+      // Stack 6 volumetric 3D flesh sidewall layers underneath the top surface so the hand
+      // has thick, meaty 3D depth (~1.3 units thick) from every camera angle!
+      const sliceGeos = [];
+      const numSlices = 6;
+      for (let s = 1; s <= numSlices; s++) {
+        const frac = s / numSlices; // 0.16 .. 1.0 down toward the tabletop
+        const sGeo = geo.clone();
+        const sBase = new Float32Array(basePositions.length);
+        sBase.set(basePositions);
+        sGeo.userData.basePositions = sBase;
+        sGeo.userData.heightScale = 1 - frac * 0.78;
+
+        const sMesh = new THREE.Mesh(sGeo, underMat);
+        // Slightly fuller width on middle slices to create a rounded, fleshy 3D bevel along the sides of the hand
+        const bevelExpand = 1 + Math.sin(frac * Math.PI) * 0.028;
+        sMesh.scale.set(bevelExpand, 1, bevelExpand);
+        sMesh.position.y = 0.52 * (1 - frac * 0.88);
+        sMesh.renderOrder = 7 - (s % 2);
+        sMesh.castShadow = true;
+        sMesh.receiveShadow = true;
+        palmUnit.add(sMesh);
+        sliceGeos.push(sGeo);
+      }
+
+      // Soft, grounded ambient occlusion shadow directly underneath each hand on the wood tabletop
+      const shadowGeo = new THREE.PlaneGeometry(handW * 1.04, handH * 1.04);
       shadowGeo.rotateX(-Math.PI / 2);
       const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-      shadowMesh.position.set(0.14 * sideSign, 0.05, 0.18);
+      shadowMesh.position.set(0.18 * sideSign, 0.03, 0.22);
       shadowMesh.renderOrder = 4;
       palmUnit.add(shadowMesh);
 
-      return { palmUnit, mesh, shadowMesh, geo };
+      return { palmUnit, mesh, shadowMesh, geo, sliceGeos };
     }
 
     // Create BOTH Left Hand (-1) and Right Hand (+1)
-    const leftPalm = buildSinglePalmPlane(leftMat, leftShadowMat, -1);
-    const rightPalm = buildSinglePalmPlane(rightMat, rightShadowMat, 1);
+    const leftPalm = buildSinglePalmPlane(leftMat, leftUnderMat, leftShadowMat, -1);
+    const rightPalm = buildSinglePalmPlane(rightMat, rightUnderMat, rightShadowMat, 1);
+
+    if (dualPalmTextures) {
+      applyHeightFieldToHandUnit(leftPalm, dualPalmTextures.left.heightData);
+      applyHeightFieldToHandUnit(rightPalm, dualPalmTextures.right.heightData);
+    } else {
+      pendingSculptableHands.push({ leftPalm, rightPalm });
+    }
 
     bothHandsGroup.add(leftPalm.palmUnit);
     bothHandsGroup.add(rightPalm.palmUnit);
@@ -2129,43 +2351,58 @@ window.initJengaGame = function () {
           const t = beatTime + phaseOffset;
 
           // Subtle confident wrist groove & swagger tilt on the table
-          palmData.palmUnit.position.y = 0.22 + Math.abs(Math.sin(t * 0.5)) * 0.05;
-          palmData.palmUnit.rotation.z = Math.sin(t * 0.35) * 0.035 * sideSign;
+          palmData.palmUnit.position.y = 0.18 + Math.abs(Math.sin(t * 0.5)) * 0.045;
+          palmData.palmUnit.rotation.z = Math.sin(t * 0.35) * 0.032 * sideSign;
 
-          // Deform the upper half of the palm plane (where the fingers & thumb are in the image)
+          // Deform the upper half of the sculpted 3D hand mesh and its volumetric flesh slices
           // to create a syncopated pinky-to-index finger-drumming wave!
           const posAttr = palmData.geo.attributes.position;
           const base = palmData.geo.userData.basePositions;
           if (!base) return;
 
+          const sliceGeos = palmData.sliceGeos || [];
+
           for (let k = 0; k < posAttr.count; k++) {
             const idx = k * 3;
-            const bx = base[idx];     // -4.1 .. +4.1 across the width of the hand
-            const by = base[idx + 1]; // base Y (0)
-            const bz = base[idx + 2]; // -5.6 (fingertips) .. +5.6 (wrist)
+            const bx = base[idx];     // -4.5 .. +4.5 across the width of the hand
+            const by = base[idx + 1]; // sculpted 3D height Y (0 .. 1.35)
+            const bz = base[idx + 2]; // -5.9 (fingertips) .. +5.9 (wrist)
 
-            // Finger region is bz < 0.6 (pointing toward the Jenga tower)
-            if (bz < 0.6) {
+            let dy = 0;
+            let dz = 0;
+
+            // Finger region is bz < 0.65 (pointing toward the Jenga tower)
+            if (bz < 0.65) {
               // Normalized finger reach from knuckle (0) to fingertip (1)
-              const reach = Math.min(1, Math.max(0, (0.6 - bz) / 6.2));
+              const reach = Math.min(1, Math.max(0, (0.65 - bz) / 6.55));
               // Normalized lateral position across the 4 fingers + thumb (-1 .. +1)
-              const lateral = (bx / 4.1) * sideSign;
+              const lateral = (bx / 4.5) * sideSign;
               const wavePhase = t * 1.35 - lateral * 2.1;
               const rawWave = Math.sin(wavePhase);
               const tapLift = rawWave > 0 ? Math.pow(rawWave, 2.4) : 0;
 
-              // Lift the fingers and curl fingertips slightly forward/down on the tap beat
-              posAttr.array[idx + 1] = by + reach * reach * tapLift * 0.65;
-              posAttr.array[idx + 2] = bz + reach * tapLift * 0.16;
-            } else {
-              posAttr.array[idx + 1] = by;
-              posAttr.array[idx + 2] = bz;
+              dy = reach * reach * tapLift * 0.68;
+              dz = reach * tapLift * 0.16;
+            }
+
+            posAttr.array[idx + 1] = by + dy;
+            posAttr.array[idx + 2] = bz + dz;
+
+            for (let s = 0; s < sliceGeos.length; s++) {
+              const sGeo = sliceGeos[s];
+              const sArr = sGeo.attributes.position.array;
+              const hScale = sGeo.userData.heightScale || 0.5;
+              sArr[idx + 1] = by * hScale + dy;
+              sArr[idx + 2] = bz + dz;
             }
           }
           posAttr.needsUpdate = true;
+          for (let s = 0; s < sliceGeos.length; s++) {
+            sliceGeos[s].attributes.position.needsUpdate = true;
+          }
         };
 
-        // Animate BOTH Left Open Palm and Right Open Palm in an alternating swagger groove!
+        // Animate BOTH Left Hand and Right Hand in an alternating swagger groove!
         animateSinglePalmSwag(activeChair.handObj.leftPalm, -1, 0);
         animateSinglePalmSwag(activeChair.handObj.rightPalm, 1, 1.55);
       }
