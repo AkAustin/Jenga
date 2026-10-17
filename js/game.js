@@ -475,164 +475,301 @@ window.initJengaGame = function () {
   }
 
   /**
-   * Builds a friendly, sculpted 3D Open Palm Hand resting on the player's side of the table,
-   * complete with tailored sleeve cuff in the player's color, wrist, palm, and 5 spread fingers.
+   * Builds a visually appealing, anatomically sculpted 3D Open Palm Hand with "swag":
+   * - Tailored jacket sleeve with gold button + French shirt cuff
+   * - Luxury Gold & Obsidian Chronograph Watch + Gold Wrist Chain
+   * - Sculpted anatomical palm with thumb muscle (thenar) & heel pad
+   * - Multi-joint articulated fingers (knuckle + middle PIP joint + glossy fingernails)
+   * - Gold Signet Ring on the ring finger
    */
   function createOpenPalmHandMesh(playerColorHex) {
     const handGroup = new THREE.Group();
 
     const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xe0ac8b,
+      color: 0xdba382,
+      roughness: 0.44,
+      metalness: 0.03
+    });
+
+    const palmCreaseMat = new THREE.MeshStandardMaterial({
+      color: 0xc98d6b,
       roughness: 0.52,
       metalness: 0.02
     });
 
     const nailMat = new THREE.MeshStandardMaterial({
-      color: 0xf5d6c3,
-      roughness: 0.32,
-      metalness: 0.05
+      color: 0xf7ddd0,
+      roughness: 0.22,
+      metalness: 0.08
     });
 
     const sleeveMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(playerColorHex),
-      roughness: 0.6,
-      metalness: 0.05
+      roughness: 0.52,
+      metalness: 0.08
     });
 
     const cuffMat = new THREE.MeshStandardMaterial({
-      color: 0xfaf6f0,
-      roughness: 0.45
+      color: 0xfcfaf7,
+      roughness: 0.38
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xd9a05b,
-      roughness: 0.25,
-      metalness: 0.8
+      color: 0xffc65c,
+      roughness: 0.2,
+      metalness: 0.88
     });
 
-    // 1. Forearm Sleeve & White Shirt Cuff resting near the table rim (+Z local points toward chair)
-    const sleeveGeo = new THREE.CylinderGeometry(1.45, 1.75, 4.6, 20);
+    const obsidianMat = new THREE.MeshStandardMaterial({
+      color: 0x111318,
+      roughness: 0.15,
+      metalness: 0.6
+    });
+
+    // 1. Tailored Jacket Sleeve & Crisp French Cuff
+    const sleeveGeo = new THREE.CylinderGeometry(1.48, 1.82, 4.8, 24);
     sleeveGeo.rotateX(Math.PI / 2);
     const sleeveMesh = new THREE.Mesh(sleeveGeo, sleeveMat);
-    sleeveMesh.scale.set(1.15, 0.72, 1.0);
-    sleeveMesh.position.set(0, 0.95, 4.6);
+    sleeveMesh.scale.set(1.16, 0.72, 1.0);
+    sleeveMesh.position.set(0, 0.98, 4.75);
     sleeveMesh.castShadow = true;
     sleeveMesh.receiveShadow = true;
     handGroup.add(sleeveMesh);
 
-    const cuffGeo = new THREE.CylinderGeometry(1.32, 1.42, 0.9, 20);
+    // Gold sleeve cufflink buttons
+    [-0.25, 0.25].forEach((bz) => {
+      const btn = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.18, 0.12, 14),
+        goldMat
+      );
+      btn.rotation.z = Math.PI / 2;
+      btn.position.set(1.68, 0.95, 3.6 + bz * 2.2);
+      handGroup.add(btn);
+    });
+
+    const cuffGeo = new THREE.CylinderGeometry(1.34, 1.44, 0.95, 24);
     cuffGeo.rotateX(Math.PI / 2);
     const cuffMesh = new THREE.Mesh(cuffGeo, cuffMat);
     cuffMesh.scale.set(1.12, 0.7, 1.0);
-    cuffMesh.position.set(0, 0.82, 2.15);
+    cuffMesh.position.set(0, 0.84, 2.22);
     cuffMesh.castShadow = true;
     handGroup.add(cuffMesh);
 
-    // Subtle wristwatch / cuff accent
-    const watchBandGeo = new THREE.CylinderGeometry(1.26, 1.3, 0.45, 20);
-    watchBandGeo.rotateX(Math.PI / 2);
-    const watchBand = new THREE.Mesh(watchBandGeo, goldMat);
-    watchBand.scale.set(1.12, 0.72, 1.0);
-    watchBand.position.set(0, 0.78, 1.65);
-    handGroup.add(watchBand);
+    // 2. Luxury Gold & Obsidian Chronograph Watch on the Wrist
+    const watchGroup = new THREE.Group();
+    watchGroup.position.set(0, 0.82, 1.58);
+    handGroup.add(watchGroup);
 
-    // 2. Sculpted Open Palm Cushion resting on the tabletop
+    const strapGeo = new THREE.CylinderGeometry(1.28, 1.32, 0.58, 24);
+    strapGeo.rotateX(Math.PI / 2);
+    const strapMesh = new THREE.Mesh(strapGeo, goldMat);
+    strapMesh.scale.set(1.12, 0.72, 1.0);
+    strapMesh.castShadow = true;
+    watchGroup.add(strapMesh);
+
+    // Watch Bezel & Dial Face on top of wrist
+    const bezelMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.72, 0.76, 0.24, 24),
+      goldMat
+    );
+    bezelMesh.position.set(0, 0.88, 0);
+    bezelMesh.castShadow = true;
+    watchGroup.add(bezelMesh);
+
+    const dialMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.58, 0.58, 0.26, 24),
+      obsidianMat
+    );
+    dialMesh.position.set(0, 0.88, 0);
+    watchGroup.add(dialMesh);
+
+    // Gold watch hands
+    const hourHand = new THREE.Mesh(
+      new THREE.BoxGeometry(0.08, 0.04, 0.36),
+      goldMat
+    );
+    hourHand.position.set(0.06, 1.02, -0.08);
+    hourHand.rotation.y = 0.5;
+    watchGroup.add(hourHand);
+
+    // Cuban-style gold bracelet link just ahead of the watch
+    const chainGeo = new THREE.TorusGeometry(1.18, 0.09, 10, 24);
+    const chainMesh = new THREE.Mesh(chainGeo, goldMat);
+    chainMesh.scale.set(1.14, 0.72, 1.0);
+    chainMesh.position.set(0, 0.76, 1.12);
+    handGroup.add(chainMesh);
+
+    // 3. Anatomically Sculpted Palm & Wrist Pivot
     const palmPivot = new THREE.Group();
-    palmPivot.position.set(0, 0.52, 0);
+    palmPivot.position.set(0, 0.55, 0);
     handGroup.add(palmPivot);
 
-    const palmGeo = new THREE.SphereGeometry(1.65, 24, 18);
+    // Main dorsal/metacarpal hand body
+    const palmGeo = new THREE.SphereGeometry(1.68, 28, 20);
     const palmMesh = new THREE.Mesh(palmGeo, skinMat);
-    palmMesh.scale.set(1.05, 0.34, 1.18);
-    palmMesh.position.set(0, 0, 0.1);
+    palmMesh.scale.set(1.06, 0.35, 1.18);
+    palmMesh.position.set(0, 0.02, 0.08);
     palmMesh.castShadow = true;
     palmMesh.receiveShadow = true;
     palmPivot.add(palmMesh);
 
-    // 3. Thumb (spread naturally in a friendly open-palm gesture)
+    // Muscular thumb pad (thenar eminence) & outer palm heel pad
+    const thenarPad = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85, 16, 14),
+      palmCreaseMat
+    );
+    thenarPad.scale.set(0.95, 0.42, 1.25);
+    thenarPad.position.set(-0.92, -0.06, 0.42);
+    palmPivot.add(thenarPad);
+
+    const heelPad = new THREE.Mesh(
+      new THREE.SphereGeometry(0.78, 16, 14),
+      palmCreaseMat
+    );
+    heelPad.scale.set(0.9, 0.4, 1.2);
+    heelPad.position.set(0.82, -0.06, 0.52);
+    palmPivot.add(heelPad);
+
+    // 4. Articulated Thumb (2 segments + glossy thumbnail)
     const thumbGroup = new THREE.Group();
-    thumbGroup.position.set(-1.35, -0.02, 0.35);
-    thumbGroup.rotation.y = 0.58; // Angled outward
+    thumbGroup.position.set(-1.38, -0.02, 0.36);
+    thumbGroup.rotation.y = 0.62;
     palmPivot.add(thumbGroup);
 
-    const thumbProxGeo = new THREE.CylinderGeometry(0.34, 0.42, 1.35, 14);
+    const thumbProxGeo = new THREE.CylinderGeometry(0.35, 0.44, 1.32, 16);
     thumbProxGeo.rotateX(Math.PI / 2);
     const thumbProx = new THREE.Mesh(thumbProxGeo, skinMat);
-    thumbProx.scale.set(1.0, 0.78, 1.0);
-    thumbProx.position.set(0, 0, -0.6);
+    thumbProx.scale.set(1.0, 0.8, 1.0);
+    thumbProx.position.set(0, 0, -0.58);
     thumbProx.castShadow = true;
     thumbGroup.add(thumbProx);
 
-    const thumbDistGeo = new THREE.CylinderGeometry(0.28, 0.34, 1.1, 14);
+    const thumbDistGroup = new THREE.Group();
+    thumbDistGroup.position.set(0, 0, -1.18);
+    thumbDistGroup.rotation.y = -0.18;
+    thumbGroup.add(thumbDistGroup);
+
+    const thumbDistGeo = new THREE.CylinderGeometry(0.28, 0.35, 1.12, 16);
     thumbDistGeo.rotateX(Math.PI / 2);
     const thumbDist = new THREE.Mesh(thumbDistGeo, skinMat);
-    thumbDist.scale.set(1.0, 0.76, 1.0);
-    thumbDist.position.set(0, 0, -1.65);
+    thumbDist.scale.set(1.0, 0.78, 1.0);
+    thumbDist.position.set(0, 0, -0.52);
     thumbDist.castShadow = true;
-    thumbGroup.add(thumbDist);
+    thumbDistGroup.add(thumbDist);
 
-    const thumbTipGeo = new THREE.SphereGeometry(0.28, 14, 12);
-    const thumbTip = new THREE.Mesh(thumbTipGeo, skinMat);
-    thumbTip.scale.set(1.0, 0.76, 1.1);
-    thumbTip.position.set(0, 0, -2.2);
-    thumbGroup.add(thumbTip);
+    const thumbTip = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 16, 14),
+      skinMat
+    );
+    thumbTip.scale.set(1.0, 0.78, 1.15);
+    thumbTip.position.set(0, 0, -1.08);
+    thumbDistGroup.add(thumbTip);
 
-    // 4. Four Spread Fingers (Index, Middle, Ring, Little) resting open on the table
+    const thumbNail = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 12, 10),
+      nailMat
+    );
+    thumbNail.scale.set(0.95, 0.25, 1.2);
+    thumbNail.position.set(0, 0.18, -0.95);
+    thumbDistGroup.add(thumbNail);
+
+    // 5. Four 2-Joint Articulated Fingers (Index, Middle, Ring with Gold Signet Ring, Pinky)
     const fingerSpecs = [
-      { x: -1.02, z: -1.45, len: 2.35, r1: 0.31, r2: 0.24, splay: 0.15 },  // Index
-      { x: -0.34, z: -1.62, len: 2.62, r1: 0.33, r2: 0.25, splay: 0.04 },  // Middle
-      { x: 0.36, z: -1.52, len: 2.42, r1: 0.31, r2: 0.24, splay: -0.06 },  // Ring
-      { x: 1.02, z: -1.28, len: 1.95, r1: 0.27, r2: 0.21, splay: -0.18 }   // Little
+      { x: -1.04, z: -1.42, l1: 1.32, l2: 1.18, r1: 0.33, rMid: 0.28, r2: 0.23, splay: 0.14, hasRing: false }, // Index
+      { x: -0.35, z: -1.58, l1: 1.48, l2: 1.32, r1: 0.35, rMid: 0.29, r2: 0.24, splay: 0.03, hasRing: false }, // Middle
+      { x: 0.36,  z: -1.48, l1: 1.38, l2: 1.22, r1: 0.33, rMid: 0.28, r2: 0.23, splay: -0.06, hasRing: true }, // Ring (with Gold Signet!)
+      { x: 1.04,  z: -1.24, l1: 1.08, l2: 0.98, r1: 0.28, rMid: 0.24, r2: 0.19, splay: -0.19, hasRing: false } // Little
     ];
 
     const fingerGroups = [];
 
     fingerSpecs.forEach((f) => {
+      // Base knuckle pivot (MCP joint)
       const fGroup = new THREE.Group();
-      fGroup.position.set(f.x, -0.04, f.z);
+      fGroup.position.set(f.x, -0.02, f.z);
       fGroup.rotation.y = f.splay;
 
-      // Knuckle sphere
-      const knuckle = new THREE.Mesh(
-        new THREE.SphereGeometry(f.r1 * 1.02, 12, 10),
+      const mcpKnuckle = new THREE.Mesh(
+        new THREE.SphereGeometry(f.r1 * 1.04, 14, 12),
         skinMat
       );
-      knuckle.scale.set(1, 0.75, 1);
-      fGroup.add(knuckle);
+      mcpKnuckle.scale.set(1.0, 0.78, 1.0);
+      fGroup.add(mcpKnuckle);
 
-      // Finger shaft
-      const shaftGeo = new THREE.CylinderGeometry(f.r2, f.r1, f.len, 14);
-      shaftGeo.rotateX(Math.PI / 2);
-      const shaft = new THREE.Mesh(shaftGeo, skinMat);
-      shaft.scale.set(1.0, 0.76, 1.0);
-      shaft.position.set(0, 0, -f.len / 2);
-      shaft.castShadow = true;
-      shaft.receiveShadow = true;
-      fGroup.add(shaft);
+      // Proximal phalanx
+      const proxGeo = new THREE.CylinderGeometry(f.rMid, f.r1, f.l1, 16);
+      proxGeo.rotateX(Math.PI / 2);
+      const proxMesh = new THREE.Mesh(proxGeo, skinMat);
+      proxMesh.scale.set(1.0, 0.8, 1.0);
+      proxMesh.position.set(0, 0, -f.l1 / 2);
+      proxMesh.castShadow = true;
+      proxMesh.receiveShadow = true;
+      fGroup.add(proxMesh);
 
-      // Rounded fingertip
+      // Swag Gold Signet Ring on the Ring Finger!
+      if (f.hasRing) {
+        const ringBand = new THREE.Mesh(
+          new THREE.CylinderGeometry(f.r1 * 1.06, f.r1 * 1.08, 0.32, 20),
+          goldMat
+        );
+        ringBand.rotation.x = Math.PI / 2;
+        ringBand.scale.set(1.0, 0.84, 1.0);
+        ringBand.position.set(0, 0, -f.l1 * 0.42);
+        fGroup.add(ringBand);
+
+        const signetTop = new THREE.Mesh(
+          new THREE.BoxGeometry(0.36, 0.12, 0.32),
+          obsidianMat
+        );
+        signetTop.position.set(0, f.r1 * 0.82, -f.l1 * 0.42);
+        fGroup.add(signetTop);
+      }
+
+      // Middle Knuckle Pivot (PIP joint) so the fingertip curls down naturally when drumming!
+      const distGroup = new THREE.Group();
+      distGroup.position.set(0, 0, -f.l1);
+      fGroup.add(distGroup);
+
+      const pipKnuckle = new THREE.Mesh(
+        new THREE.SphereGeometry(f.rMid * 1.02, 14, 12),
+        skinMat
+      );
+      pipKnuckle.scale.set(1.0, 0.78, 1.0);
+      distGroup.add(pipKnuckle);
+
+      const distGeo = new THREE.CylinderGeometry(f.r2, f.rMid, f.l2, 16);
+      distGeo.rotateX(Math.PI / 2);
+      const distMesh = new THREE.Mesh(distGeo, skinMat);
+      distMesh.scale.set(1.0, 0.78, 1.0);
+      distMesh.position.set(0, 0, -f.l2 / 2);
+      distMesh.castShadow = true;
+      distMesh.receiveShadow = true;
+      distGroup.add(distMesh);
+
+      // Rounded fingertip pad
       const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(f.r2, 14, 12),
+        new THREE.SphereGeometry(f.r2, 16, 14),
         skinMat
       );
-      tip.scale.set(1.0, 0.76, 1.15);
-      tip.position.set(0, 0, -f.len);
-      fGroup.add(tip);
+      tip.scale.set(1.0, 0.76, 1.18);
+      tip.position.set(0, 0, -f.l2);
+      distGroup.add(tip);
 
-      // Subtle fingernail
+      // Glossy contoured fingernail
       const nail = new THREE.Mesh(
-        new THREE.SphereGeometry(f.r2 * 0.78, 10, 8),
+        new THREE.SphereGeometry(f.r2 * 0.82, 12, 10),
         nailMat
       );
-      nail.scale.set(0.95, 0.25, 1.15);
-      nail.position.set(0, f.r2 * 0.62, -f.len + 0.12);
-      fGroup.add(nail);
+      nail.scale.set(0.95, 0.24, 1.22);
+      nail.position.set(0, f.r2 * 0.64, -f.l2 + 0.14);
+      distGroup.add(nail);
 
+      fGroup.userData.distGroup = distGroup;
       palmPivot.add(fGroup);
       fingerGroups.push(fGroup);
     });
 
-    return { group: handGroup, palmPivot, fingerGroups };
+    return { group: handGroup, palmPivot, thumbGroup, fingerGroups };
   }
 
   /**
@@ -1564,6 +1701,8 @@ window.initJengaGame = function () {
     isDraggingBlock = false;
     controls.enabled = true;
     hideGhostSlots();
+
+    // Plays "Oh!" vocal reaction + collapsing wood blocks clatter
     window.JengaAudio.playTowerCollapse();
 
     const loser = state.players[state.currentPlayerIdx];
@@ -1571,6 +1710,7 @@ window.initJengaGame = function () {
       (state.currentPlayerIdx - 1 + state.players.length) % state.players.length;
     const winner = state.players[winnerIdx];
 
+    showToast(`😱 Oh! ${loser.name} broke the tower!`);
     updateHUD();
 
     setTimeout(() => {
@@ -1579,18 +1719,20 @@ window.initJengaGame = function () {
       const desc = document.getElementById('gameover-desc');
 
       if (state.players.length === 1) {
-        title.textContent = 'Tower Collapsed!';
+        title.textContent = 'Oh! Tower Collapsed!';
         desc.textContent = `You stacked the tower to ${
           state.towerPeakLayer + 1
         } stories (${state.blocksMovedTotal} blocks moved) before it tumbled!`;
       } else {
-        title.textContent = `${winner.name} Wins!`;
-        desc.textContent = `The tower collapsed on ${loser.name}'s turn at ${
+        // Play "Yey!" victory celebration sound + fanfare + applause for the winner!
+        window.JengaAudio.playWinYey();
+        title.textContent = `🎉 Yey! ${winner.name} Wins!`;
+        desc.textContent = `Oh! The tower collapsed on ${loser.name}'s turn at ${
           state.towerPeakLayer + 1
         } stories high (${state.blocksMovedTotal} successful moves).`;
       }
       modal.classList.add('open');
-    }, 1200);
+    }, 1150);
   }
 
   // UI & HUD Updates
@@ -2073,7 +2215,7 @@ window.initJengaGame = function () {
       checkTowerCollapse();
     }
 
-    // Gentle friendly pulse on the active player's table side & open-palm hand on the table
+    // Gentle friendly pulse on the active player's table side & "Swag" finger-drumming hand
     const activeChair = chairObjects[state.currentPlayerIdx];
     if (activeChair) {
       const pulse = 0.5 + 0.5 * Math.sin(now * 0.004);
@@ -2081,13 +2223,34 @@ window.initJengaGame = function () {
       activeChair.rimArcMat.opacity = 0.65 + pulse * 0.32;
 
       if (activeChair.handObj && activeChair.handObj.group.visible) {
-        // Subtle natural breathing & friendly finger tap on the table surface
+        const beatTime = now * 0.0075;
+        // Confident wrist groove bounce & subtle swagger tilt
         activeChair.handObj.palmPivot.position.y =
-          0.52 + Math.sin(now * 0.0035) * 0.04;
+          0.55 + Math.abs(Math.sin(beatTime * 0.5)) * 0.055;
+        activeChair.handObj.palmPivot.rotation.z =
+          Math.sin(beatTime * 0.25) * 0.045;
+
+        // Syncopated Pinky -> Ring -> Middle -> Index finger-roll wave with curled PIP joints
         activeChair.handObj.fingerGroups.forEach((fg, fIdx) => {
-          const tapWave = Math.max(0, Math.sin(now * 0.006 - fIdx * 0.55));
-          fg.rotation.x = tapWave * 0.09;
+          const reverseIdx = 3 - fIdx; // Roll from pinky (3) to index (0)
+          const phase = beatTime - reverseIdx * 0.52;
+          const rawWave = Math.sin(phase);
+          // Sharp snappy lift & drop envelope
+          const lift = rawWave > 0 ? Math.pow(rawWave, 2.2) : 0;
+
+          fg.rotation.x = lift * 0.26;
+          if (fg.userData.distGroup) {
+            // Curl the fingertip downward as the knuckle lifts for authentic table-drumming swag
+            fg.userData.distGroup.rotation.x = -lift * 0.34 - 0.05;
+          }
         });
+
+        // Rhythmic thumb groove tap on the off-beat
+        if (activeChair.handObj.thumbGroup) {
+          const thumbBeat = Math.max(0, Math.sin(beatTime * 0.5 + 1.4));
+          activeChair.handObj.thumbGroup.rotation.x =
+            Math.pow(thumbBeat, 3) * 0.22;
+        }
       }
     }
 
