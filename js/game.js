@@ -474,302 +474,225 @@ window.initJengaGame = function () {
     return { group: chair, cushion, badge };
   }
 
+  // Cached transparent CanvasTextures for the Left and Right open palms extracted from the user's image
+  let dualPalmTextures = null;
+  const pendingDualPalmMaterials = [];
+
+  function applyDualPalmTexturesToMaterialPair(leftMat, rightMat, leftShadowMat, rightShadowMat) {
+    if (!dualPalmTextures) return;
+    leftMat.map = dualPalmTextures.leftTex;
+    leftMat.alphaTest = 0.05;
+    leftMat.needsUpdate = true;
+
+    rightMat.map = dualPalmTextures.rightTex;
+    rightMat.alphaTest = 0.05;
+    rightMat.needsUpdate = true;
+
+    if (leftShadowMat) {
+      leftShadowMat.map = dualPalmTextures.leftTex;
+      leftShadowMat.needsUpdate = true;
+    }
+    if (rightShadowMat) {
+      rightShadowMat.map = dualPalmTextures.rightTex;
+      rightShadowMat.needsUpdate = true;
+    }
+  }
+
+  function ensureDualPalmTexturesLoaded() {
+    if (dualPalmTextures || ensureDualPalmTexturesLoaded.loading) return;
+    ensureDualPalmTexturesLoaded.loading = true;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const fullW = img.naturalWidth || 980;
+      const fullH = img.naturalHeight || 542;
+      const halfW = Math.floor(fullW / 2);
+
+      function buildSinglePalmSideTexture(srcX, srcW) {
+        const c = document.createElement('canvas');
+        c.width = srcW;
+        c.height = fullH;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, srcX, 0, srcW, fullH, 0, 0, srcW, fullH);
+
+        const imgData = ctx.getImageData(0, 0, srcW, fullH);
+        const d = imgData.data;
+
+        // Chroma-key out the white studio background while preserving natural skin tones & soft edges
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i];
+          const g = d[i + 1];
+          const b = d[i + 2];
+
+          const maxC = Math.max(r, g, b);
+          const minC = Math.min(r, g, b);
+          const saturation = maxC - minC;
+          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+
+          // Pure white / near-white background pixels have high luma and low saturation
+          if (luma > 242 && saturation < 18) {
+            d[i + 3] = 0;
+          } else if (luma > 218 && saturation < 36) {
+            // Smooth anti-aliased feather along the contour of the fingers and palm
+            const lumaFactor = (244 - luma) / 26;
+            const satFactor = saturation / 36;
+            const alpha = Math.max(0, Math.min(1, Math.max(lumaFactor, satFactor)));
+            d[i + 3] = Math.round(alpha * 255);
+          } else {
+            d[i + 3] = 255;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        const tex = new THREE.CanvasTexture(c);
+        tex.encoding = THREE.sRGBEncoding;
+        tex.anisotropy = 4;
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      dualPalmTextures = {
+        leftTex: buildSinglePalmSideTexture(0, halfW),
+        rightTex: buildSinglePalmSideTexture(halfW, fullW - halfW)
+      };
+
+      while (pendingDualPalmMaterials.length > 0) {
+        const item = pendingDualPalmMaterials.pop();
+        applyDualPalmTexturesToMaterialPair(
+          item.leftMat,
+          item.rightMat,
+          item.leftShadowMat,
+          item.rightShadowMat
+        );
+      }
+    };
+    img.src = window.JENGA_PALMS_BASE64 || 'assets/palms.jpg';
+  }
+
   /**
-   * Builds a visually appealing, anatomically sculpted 3D Open Palm Hand with "swag":
-   * - Tailored jacket sleeve with gold button + French shirt cuff
-   * - Luxury Gold & Obsidian Chronograph Watch + Gold Wrist Chain
-   * - Sculpted anatomical palm with thumb muscle (thenar) & heel pad
-   * - Multi-joint articulated fingers (knuckle + middle PIP joint + glossy fingernails)
-   * - Gold Signet Ring on the ring finger
+   * Builds BOTH Open Palms (Left Palm & Right Palm) using the user's custom dual-palm image,
+   * resting on the active player's highlighted side of the circular table with subdivided
+   * finger meshes for rhythmic "swag" finger-tapping & wrist groove animation.
    */
   function createOpenPalmHandMesh(playerColorHex) {
-    const handGroup = new THREE.Group();
+    ensureDualPalmTexturesLoaded();
 
-    const skinMat = new THREE.MeshStandardMaterial({
-      color: 0xdba382,
-      roughness: 0.44,
-      metalness: 0.03
+    const bothHandsGroup = new THREE.Group();
+
+    const leftMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.55,
+      metalness: 0.04,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: true
     });
 
-    const palmCreaseMat = new THREE.MeshStandardMaterial({
-      color: 0xc98d6b,
-      roughness: 0.52,
-      metalness: 0.02
+    const rightMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.55,
+      metalness: 0.04,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: true
     });
 
-    const nailMat = new THREE.MeshStandardMaterial({
-      color: 0xf7ddd0,
-      roughness: 0.22,
-      metalness: 0.08
+    const leftShadowMat = new THREE.MeshBasicMaterial({
+      color: 0x090502,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false
     });
+
+    const rightShadowMat = new THREE.MeshBasicMaterial({
+      color: 0x090502,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false
+    });
+
+    if (dualPalmTextures) {
+      applyDualPalmTexturesToMaterialPair(leftMat, rightMat, leftShadowMat, rightShadowMat);
+    } else {
+      pendingDualPalmMaterials.push({ leftMat, rightMat, leftShadowMat, rightShadowMat });
+    }
 
     const sleeveMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(playerColorHex),
-      roughness: 0.52,
+      roughness: 0.5,
       metalness: 0.08
-    });
-
-    const cuffMat = new THREE.MeshStandardMaterial({
-      color: 0xfcfaf7,
-      roughness: 0.38
     });
 
     const goldMat = new THREE.MeshStandardMaterial({
       color: 0xffc65c,
-      roughness: 0.2,
+      roughness: 0.22,
       metalness: 0.88
     });
 
-    const obsidianMat = new THREE.MeshStandardMaterial({
-      color: 0x111318,
-      roughness: 0.15,
-      metalness: 0.6
-    });
+    function buildSinglePalmPlane(palmMat, shadowMat, sideSign) {
+      const palmUnit = new THREE.Group();
+      // Position Left Palm (-6.9) and Right Palm (+6.9) framing the player's turn plaque on the table
+      palmUnit.position.set(sideSign * 6.9, 0.22, 20.5);
+      // Angle both open palms slightly inward toward the Jenga tower center
+      palmUnit.rotation.y = sideSign * 0.22;
 
-    // 1. Tailored Jacket Sleeve & Crisp French Cuff
-    const sleeveGeo = new THREE.CylinderGeometry(1.48, 1.82, 4.8, 24);
-    sleeveGeo.rotateX(Math.PI / 2);
-    const sleeveMesh = new THREE.Mesh(sleeveGeo, sleeveMat);
-    sleeveMesh.scale.set(1.16, 0.72, 1.0);
-    sleeveMesh.position.set(0, 0.98, 4.75);
-    sleeveMesh.castShadow = true;
-    sleeveMesh.receiveShadow = true;
-    handGroup.add(sleeveMesh);
+      // Subdivided plane so individual fingers (top half of image) ripple & tap with swag!
+      const segX = 20;
+      const segY = 20;
+      const geo = new THREE.PlaneGeometry(6.8, 7.6, segX, segY);
+      geo.rotateX(-Math.PI / 2);
 
-    // Gold sleeve cufflink buttons
-    [-0.25, 0.25].forEach((bz) => {
-      const btn = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18, 0.18, 0.12, 14),
-        goldMat
-      );
-      btn.rotation.z = Math.PI / 2;
-      btn.position.set(1.68, 0.95, 3.6 + bz * 2.2);
-      handGroup.add(btn);
-    });
+      // Store base vertex coordinates so we can animate a 4-finger drumming wave
+      const posAttr = geo.attributes.position;
+      const basePositions = new Float32Array(posAttr.array.length);
+      basePositions.set(posAttr.array);
+      geo.userData.basePositions = basePositions;
 
-    const cuffGeo = new THREE.CylinderGeometry(1.34, 1.44, 0.95, 24);
-    cuffGeo.rotateX(Math.PI / 2);
-    const cuffMesh = new THREE.Mesh(cuffGeo, cuffMat);
-    cuffMesh.scale.set(1.12, 0.7, 1.0);
-    cuffMesh.position.set(0, 0.84, 2.22);
-    cuffMesh.castShadow = true;
-    handGroup.add(cuffMesh);
+      const mesh = new THREE.Mesh(geo, palmMat);
+      mesh.position.y = 0.28;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      palmUnit.add(mesh);
 
-    // 2. Luxury Gold & Obsidian Chronograph Watch on the Wrist
-    const watchGroup = new THREE.Group();
-    watchGroup.position.set(0, 0.82, 1.58);
-    handGroup.add(watchGroup);
+      // Soft contact shadow directly underneath each open palm on the wood tabletop
+      const shadowGeo = new THREE.PlaneGeometry(6.8, 7.6);
+      shadowGeo.rotateX(-Math.PI / 2);
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.position.set(0.12 * sideSign, 0.04, 0.16);
+      palmUnit.add(shadowMesh);
 
-    const strapGeo = new THREE.CylinderGeometry(1.28, 1.32, 0.58, 24);
-    strapGeo.rotateX(Math.PI / 2);
-    const strapMesh = new THREE.Mesh(strapGeo, goldMat);
-    strapMesh.scale.set(1.12, 0.72, 1.0);
-    strapMesh.castShadow = true;
-    watchGroup.add(strapMesh);
+      // Player-colored wristband / sleeve cuff accent at the base of each palm
+      const cuffGeo = new THREE.CylinderGeometry(1.35, 1.52, 1.65, 20);
+      cuffGeo.rotateX(Math.PI / 2);
+      const cuffMesh = new THREE.Mesh(cuffGeo, sleeveMat);
+      cuffMesh.scale.set(1.18, 0.36, 1.0);
+      cuffMesh.position.set(0, 0.26, 3.85);
+      palmUnit.add(cuffMesh);
 
-    // Watch Bezel & Dial Face on top of wrist
-    const bezelMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.72, 0.76, 0.24, 24),
-      goldMat
-    );
-    bezelMesh.position.set(0, 0.88, 0);
-    bezelMesh.castShadow = true;
-    watchGroup.add(bezelMesh);
+      // Gold luxury wrist chain / watch accent on each wrist
+      const goldBandGeo = new THREE.CylinderGeometry(1.3, 1.34, 0.34, 20);
+      goldBandGeo.rotateX(Math.PI / 2);
+      const goldBand = new THREE.Mesh(goldBandGeo, goldMat);
+      goldBand.scale.set(1.18, 0.38, 1.0);
+      goldBand.position.set(0, 0.28, 3.02);
+      palmUnit.add(goldBand);
 
-    const dialMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.58, 0.58, 0.26, 24),
-      obsidianMat
-    );
-    dialMesh.position.set(0, 0.88, 0);
-    watchGroup.add(dialMesh);
+      return { palmUnit, mesh, shadowMesh, geo };
+    }
 
-    // Gold watch hands
-    const hourHand = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.04, 0.36),
-      goldMat
-    );
-    hourHand.position.set(0.06, 1.02, -0.08);
-    hourHand.rotation.y = 0.5;
-    watchGroup.add(hourHand);
+    // Create BOTH Left Open Palm (-1) and Right Open Palm (+1)
+    const leftPalm = buildSinglePalmPlane(leftMat, leftShadowMat, -1);
+    const rightPalm = buildSinglePalmPlane(rightMat, rightShadowMat, 1);
 
-    // Cuban-style gold bracelet link just ahead of the watch
-    const chainGeo = new THREE.TorusGeometry(1.18, 0.09, 10, 24);
-    const chainMesh = new THREE.Mesh(chainGeo, goldMat);
-    chainMesh.scale.set(1.14, 0.72, 1.0);
-    chainMesh.position.set(0, 0.76, 1.12);
-    handGroup.add(chainMesh);
+    bothHandsGroup.add(leftPalm.palmUnit);
+    bothHandsGroup.add(rightPalm.palmUnit);
 
-    // 3. Anatomically Sculpted Palm & Wrist Pivot
-    const palmPivot = new THREE.Group();
-    palmPivot.position.set(0, 0.55, 0);
-    handGroup.add(palmPivot);
-
-    // Main dorsal/metacarpal hand body
-    const palmGeo = new THREE.SphereGeometry(1.68, 28, 20);
-    const palmMesh = new THREE.Mesh(palmGeo, skinMat);
-    palmMesh.scale.set(1.06, 0.35, 1.18);
-    palmMesh.position.set(0, 0.02, 0.08);
-    palmMesh.castShadow = true;
-    palmMesh.receiveShadow = true;
-    palmPivot.add(palmMesh);
-
-    // Muscular thumb pad (thenar eminence) & outer palm heel pad
-    const thenarPad = new THREE.Mesh(
-      new THREE.SphereGeometry(0.85, 16, 14),
-      palmCreaseMat
-    );
-    thenarPad.scale.set(0.95, 0.42, 1.25);
-    thenarPad.position.set(-0.92, -0.06, 0.42);
-    palmPivot.add(thenarPad);
-
-    const heelPad = new THREE.Mesh(
-      new THREE.SphereGeometry(0.78, 16, 14),
-      palmCreaseMat
-    );
-    heelPad.scale.set(0.9, 0.4, 1.2);
-    heelPad.position.set(0.82, -0.06, 0.52);
-    palmPivot.add(heelPad);
-
-    // 4. Articulated Thumb (2 segments + glossy thumbnail)
-    const thumbGroup = new THREE.Group();
-    thumbGroup.position.set(-1.38, -0.02, 0.36);
-    thumbGroup.rotation.y = 0.62;
-    palmPivot.add(thumbGroup);
-
-    const thumbProxGeo = new THREE.CylinderGeometry(0.35, 0.44, 1.32, 16);
-    thumbProxGeo.rotateX(Math.PI / 2);
-    const thumbProx = new THREE.Mesh(thumbProxGeo, skinMat);
-    thumbProx.scale.set(1.0, 0.8, 1.0);
-    thumbProx.position.set(0, 0, -0.58);
-    thumbProx.castShadow = true;
-    thumbGroup.add(thumbProx);
-
-    const thumbDistGroup = new THREE.Group();
-    thumbDistGroup.position.set(0, 0, -1.18);
-    thumbDistGroup.rotation.y = -0.18;
-    thumbGroup.add(thumbDistGroup);
-
-    const thumbDistGeo = new THREE.CylinderGeometry(0.28, 0.35, 1.12, 16);
-    thumbDistGeo.rotateX(Math.PI / 2);
-    const thumbDist = new THREE.Mesh(thumbDistGeo, skinMat);
-    thumbDist.scale.set(1.0, 0.78, 1.0);
-    thumbDist.position.set(0, 0, -0.52);
-    thumbDist.castShadow = true;
-    thumbDistGroup.add(thumbDist);
-
-    const thumbTip = new THREE.Mesh(
-      new THREE.SphereGeometry(0.28, 16, 14),
-      skinMat
-    );
-    thumbTip.scale.set(1.0, 0.78, 1.15);
-    thumbTip.position.set(0, 0, -1.08);
-    thumbDistGroup.add(thumbTip);
-
-    const thumbNail = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 12, 10),
-      nailMat
-    );
-    thumbNail.scale.set(0.95, 0.25, 1.2);
-    thumbNail.position.set(0, 0.18, -0.95);
-    thumbDistGroup.add(thumbNail);
-
-    // 5. Four 2-Joint Articulated Fingers (Index, Middle, Ring with Gold Signet Ring, Pinky)
-    const fingerSpecs = [
-      { x: -1.04, z: -1.42, l1: 1.32, l2: 1.18, r1: 0.33, rMid: 0.28, r2: 0.23, splay: 0.14, hasRing: false }, // Index
-      { x: -0.35, z: -1.58, l1: 1.48, l2: 1.32, r1: 0.35, rMid: 0.29, r2: 0.24, splay: 0.03, hasRing: false }, // Middle
-      { x: 0.36,  z: -1.48, l1: 1.38, l2: 1.22, r1: 0.33, rMid: 0.28, r2: 0.23, splay: -0.06, hasRing: true }, // Ring (with Gold Signet!)
-      { x: 1.04,  z: -1.24, l1: 1.08, l2: 0.98, r1: 0.28, rMid: 0.24, r2: 0.19, splay: -0.19, hasRing: false } // Little
-    ];
-
-    const fingerGroups = [];
-
-    fingerSpecs.forEach((f) => {
-      // Base knuckle pivot (MCP joint)
-      const fGroup = new THREE.Group();
-      fGroup.position.set(f.x, -0.02, f.z);
-      fGroup.rotation.y = f.splay;
-
-      const mcpKnuckle = new THREE.Mesh(
-        new THREE.SphereGeometry(f.r1 * 1.04, 14, 12),
-        skinMat
-      );
-      mcpKnuckle.scale.set(1.0, 0.78, 1.0);
-      fGroup.add(mcpKnuckle);
-
-      // Proximal phalanx
-      const proxGeo = new THREE.CylinderGeometry(f.rMid, f.r1, f.l1, 16);
-      proxGeo.rotateX(Math.PI / 2);
-      const proxMesh = new THREE.Mesh(proxGeo, skinMat);
-      proxMesh.scale.set(1.0, 0.8, 1.0);
-      proxMesh.position.set(0, 0, -f.l1 / 2);
-      proxMesh.castShadow = true;
-      proxMesh.receiveShadow = true;
-      fGroup.add(proxMesh);
-
-      // Swag Gold Signet Ring on the Ring Finger!
-      if (f.hasRing) {
-        const ringBand = new THREE.Mesh(
-          new THREE.CylinderGeometry(f.r1 * 1.06, f.r1 * 1.08, 0.32, 20),
-          goldMat
-        );
-        ringBand.rotation.x = Math.PI / 2;
-        ringBand.scale.set(1.0, 0.84, 1.0);
-        ringBand.position.set(0, 0, -f.l1 * 0.42);
-        fGroup.add(ringBand);
-
-        const signetTop = new THREE.Mesh(
-          new THREE.BoxGeometry(0.36, 0.12, 0.32),
-          obsidianMat
-        );
-        signetTop.position.set(0, f.r1 * 0.82, -f.l1 * 0.42);
-        fGroup.add(signetTop);
-      }
-
-      // Middle Knuckle Pivot (PIP joint) so the fingertip curls down naturally when drumming!
-      const distGroup = new THREE.Group();
-      distGroup.position.set(0, 0, -f.l1);
-      fGroup.add(distGroup);
-
-      const pipKnuckle = new THREE.Mesh(
-        new THREE.SphereGeometry(f.rMid * 1.02, 14, 12),
-        skinMat
-      );
-      pipKnuckle.scale.set(1.0, 0.78, 1.0);
-      distGroup.add(pipKnuckle);
-
-      const distGeo = new THREE.CylinderGeometry(f.r2, f.rMid, f.l2, 16);
-      distGeo.rotateX(Math.PI / 2);
-      const distMesh = new THREE.Mesh(distGeo, skinMat);
-      distMesh.scale.set(1.0, 0.78, 1.0);
-      distMesh.position.set(0, 0, -f.l2 / 2);
-      distMesh.castShadow = true;
-      distMesh.receiveShadow = true;
-      distGroup.add(distMesh);
-
-      // Rounded fingertip pad
-      const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(f.r2, 16, 14),
-        skinMat
-      );
-      tip.scale.set(1.0, 0.76, 1.18);
-      tip.position.set(0, 0, -f.l2);
-      distGroup.add(tip);
-
-      // Glossy contoured fingernail
-      const nail = new THREE.Mesh(
-        new THREE.SphereGeometry(f.r2 * 0.82, 12, 10),
-        nailMat
-      );
-      nail.scale.set(0.95, 0.24, 1.22);
-      nail.position.set(0, f.r2 * 0.64, -f.l2 + 0.14);
-      distGroup.add(nail);
-
-      fGroup.userData.distGroup = distGroup;
-      palmPivot.add(fGroup);
-      fingerGroups.push(fGroup);
-    });
-
-    return { group: handGroup, palmPivot, thumbGroup, fingerGroups };
+    return {
+      group: bothHandsGroup,
+      leftPalm,
+      rightPalm
+    };
   }
 
   /**
@@ -816,7 +739,7 @@ window.initJengaGame = function () {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const label = isActive
-      ? `✋ ${playerName.toUpperCase()} • YOUR TURN`
+      ? `👐 ${playerName.toUpperCase()} • YOUR TURN`
       : `🪑 ${playerName}`;
     ctx.fillText(label, 256, 56);
 
@@ -831,7 +754,7 @@ window.initJengaGame = function () {
   scene.add(activeSeatLight);
 
   /**
-   * Spawns and arranges chairs, table-side highlight zones, nameplates, and open-palm hands
+   * Spawns and arranges chairs, table-side highlight zones, nameplates, and BOTH open palms
    * around the circular table matching `state.players.length`.
    */
   function updatePlayerChairs() {
@@ -916,11 +839,8 @@ window.initJengaGame = function () {
       plaqueMesh.position.set(0, 0.35, 24.4);
       seatTableGroup.add(plaqueMesh);
 
-      // 3. Friendly 3D Open Palm Hand resting on the player's side of the table
+      // 3. BOTH Open Palms (Left & Right) from the custom image resting on the player's side of the table
       const handObj = createOpenPalmHandMesh(player.color);
-      // Positioned naturally on the right-hand side of the player's table zone, open palm on the table
-      handObj.group.position.set(6.8, 0.02, 20.6);
-      handObj.group.rotation.y = 0.24; // Angled slightly inward toward the tower
       seatTableGroup.add(handObj.group);
 
       chairObjects.push({
@@ -2215,7 +2135,7 @@ window.initJengaGame = function () {
       checkTowerCollapse();
     }
 
-    // Gentle friendly pulse on the active player's table side & "Swag" finger-drumming hand
+    // Gentle friendly pulse on the active player's table side & "Swag" finger-drumming on BOTH Open Palms
     const activeChair = chairObjects[state.currentPlayerIdx];
     if (activeChair) {
       const pulse = 0.5 + 0.5 * Math.sin(now * 0.004);
@@ -2223,34 +2143,52 @@ window.initJengaGame = function () {
       activeChair.rimArcMat.opacity = 0.65 + pulse * 0.32;
 
       if (activeChair.handObj && activeChair.handObj.group.visible) {
-        const beatTime = now * 0.0075;
-        // Confident wrist groove bounce & subtle swagger tilt
-        activeChair.handObj.palmPivot.position.y =
-          0.55 + Math.abs(Math.sin(beatTime * 0.5)) * 0.055;
-        activeChair.handObj.palmPivot.rotation.z =
-          Math.sin(beatTime * 0.25) * 0.045;
+        const beatTime = now * 0.008;
 
-        // Syncopated Pinky -> Ring -> Middle -> Index finger-roll wave with curled PIP joints
-        activeChair.handObj.fingerGroups.forEach((fg, fIdx) => {
-          const reverseIdx = 3 - fIdx; // Roll from pinky (3) to index (0)
-          const phase = beatTime - reverseIdx * 0.52;
-          const rawWave = Math.sin(phase);
-          // Sharp snappy lift & drop envelope
-          const lift = rawWave > 0 ? Math.pow(rawWave, 2.2) : 0;
+        const animateSinglePalmSwag = (palmData, sideSign, phaseOffset) => {
+          if (!palmData || !palmData.geo) return;
+          const t = beatTime + phaseOffset;
 
-          fg.rotation.x = lift * 0.26;
-          if (fg.userData.distGroup) {
-            // Curl the fingertip downward as the knuckle lifts for authentic table-drumming swag
-            fg.userData.distGroup.rotation.x = -lift * 0.34 - 0.05;
+          // Subtle confident wrist groove & swagger tilt on the table
+          palmData.palmUnit.position.y = 0.22 + Math.abs(Math.sin(t * 0.5)) * 0.05;
+          palmData.palmUnit.rotation.z = Math.sin(t * 0.35) * 0.035 * sideSign;
+
+          // Deform the upper half of the palm plane (where the fingers & thumb are in the image)
+          // to create a syncopated pinky-to-index finger-drumming wave!
+          const posAttr = palmData.geo.attributes.position;
+          const base = palmData.geo.userData.basePositions;
+          if (!base) return;
+
+          for (let k = 0; k < posAttr.count; k++) {
+            const idx = k * 3;
+            const bx = base[idx];     // -3.4 .. +3.4 across the width of the hand
+            const by = base[idx + 1]; // base Y (0)
+            const bz = base[idx + 2]; // -3.8 (fingertips) .. +3.8 (wrist)
+
+            // Finger region is bz < 0.35 (pointing toward the Jenga tower)
+            if (bz < 0.35) {
+              // Normalized finger reach from knuckle (0) to fingertip (1)
+              const reach = Math.min(1, Math.max(0, (0.35 - bz) / 4.15));
+              // Normalized lateral position across the 4 fingers + thumb (-1 .. +1)
+              const lateral = (bx / 3.4) * sideSign;
+              const wavePhase = t * 1.35 - lateral * 2.1;
+              const rawWave = Math.sin(wavePhase);
+              const tapLift = rawWave > 0 ? Math.pow(rawWave, 2.4) : 0;
+
+              // Lift the fingers and curl fingertips slightly forward/down on the tap beat
+              posAttr.array[idx + 1] = by + reach * reach * tapLift * 0.58;
+              posAttr.array[idx + 2] = bz + reach * tapLift * 0.14;
+            } else {
+              posAttr.array[idx + 1] = by;
+              posAttr.array[idx + 2] = bz;
+            }
           }
-        });
+          posAttr.needsUpdate = true;
+        };
 
-        // Rhythmic thumb groove tap on the off-beat
-        if (activeChair.handObj.thumbGroup) {
-          const thumbBeat = Math.max(0, Math.sin(beatTime * 0.5 + 1.4));
-          activeChair.handObj.thumbGroup.rotation.x =
-            Math.pow(thumbBeat, 3) * 0.22;
-        }
+        // Animate BOTH Left Open Palm and Right Open Palm in an alternating swagger groove!
+        animateSinglePalmSwag(activeChair.handObj.leftPalm, -1, 0);
+        animateSinglePalmSwag(activeChair.handObj.rightPalm, 1, 1.55);
       }
     }
 
