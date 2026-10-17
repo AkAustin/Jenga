@@ -142,94 +142,106 @@ class SoundEngine {
   }
 
   /**
-   * Long, dramatic stretched "Ohhhhhhhhhhhhhhh!" vocal reaction that spans from
-   * when the tower begins tipping/falling all the way through the final collapse (~2.4s).
-   * Uses multi-voice formant synthesis (vowel "O-o-o-h-h-h" with natural 5.5Hz vocal vibrato)
-   * layered with a slow-stretched Web Speech utterance.
+   * Contagious multi-voice parlor laughter ("Hahaha! Ahahahaha!") that stretches
+   * across the tower's fall and collapse (~2.4 seconds).
+   * Synthesizes rhythmic "Ha-ha-ha-ha!" vocal bursts with breath aspiration + vowel formants
+   * layered with Web Speech laughter.
    */
-  playBreakOh(duration = 2.35) {
+  playBreakOh(duration = 2.4) {
     if (!this.enabled) return;
     const nowMs = performance.now();
     if (this.lastOhTime && nowMs - this.lastOhTime < 2200) {
-      return; // Already stretching "Ohhhhhhhhhhhhhhh!" from the start of the fall
+      return;
     }
     this.lastOhTime = nowMs;
 
     this.init();
     if (!this.ctx) return;
 
-    // 1. Multi-voice stretched formant "Ohhhhhhhhhhhhhhh!" crowd groan (~2.35s)
-    const basePitches = [235, 285, 188, 320, 155];
-    basePitches.forEach((startPitch, idx) => {
-      const startOffset = idx * 0.045;
-      const now = this.ctx.currentTime + startOffset;
-      const dur = duration;
+    // 1. Multi-voice rhythmic "Ha-ha-ha-ha-ha!" laughter bursts across ~2.4 seconds
+    const laughVoices = [
+      { basePitch: 240, stepMs: 175, syllables: 12, delayMs: 0 },
+      { basePitch: 315, stepMs: 160, syllables: 13, delayMs: 55 },
+      { basePitch: 185, stepMs: 190, syllables: 11, delayMs: 95 },
+      { basePitch: 370, stepMs: 155, syllables: 13, delayMs: 130 }
+    ];
 
-      const osc = this.ctx.createOscillator();
-      osc.type = 'sawtooth';
+    laughVoices.forEach((v) => {
+      for (let s = 0; s < v.syllables; s++) {
+        const burstDelay = v.delayMs + s * v.stepMs + Math.random() * 18;
+        setTimeout(() => {
+          if (!this.ctx || !this.enabled) return;
+          const now = this.ctx.currentTime;
+          const sylDur = 0.125;
 
-      // Dramatic pitch contour: initial gasp as tower tips -> long suspended hold -> falling groan on collapse
-      osc.frequency.setValueAtTime(startPitch * 1.02, now);
-      osc.frequency.linearRampToValueAtTime(startPitch * 1.18, now + dur * 0.16);
-      osc.frequency.linearRampToValueAtTime(startPitch * 1.08, now + dur * 0.52);
-      osc.frequency.exponentialRampToValueAtTime(startPitch * 0.56, now + dur);
+          // Descending laugh phrase contour with playful bounce per "Ha!" syllable
+          const phraseDecay = Math.max(0.72, 1.0 - (s % 6) * 0.045);
+          const pitch = v.basePitch * phraseDecay * (0.97 + Math.random() * 0.06);
 
-      // Natural human vocal vibrato (5.2 - 6.0 Hz LFO) during the long "Ohhhhhhhhhhhhhhh!" stretch
-      const vibratoOsc = this.ctx.createOscillator();
-      const vibratoGain = this.ctx.createGain();
-      vibratoOsc.type = 'sine';
-      vibratoOsc.frequency.setValueAtTime(5.2 + idx * 0.25, now);
-      vibratoGain.gain.setValueAtTime(0.5, now);
-      vibratoGain.gain.linearRampToValueAtTime(startPitch * 0.028, now + dur * 0.35);
-      vibratoGain.gain.linearRampToValueAtTime(startPitch * 0.015, now + dur);
-      vibratoOsc.connect(vibratoGain);
-      vibratoGain.connect(osc.frequency);
+          // Vocal cord sawtooth source for the "a" in "Ha!"
+          const osc = this.ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(pitch * 1.18, now);
+          osc.frequency.exponentialRampToValueAtTime(pitch * 0.84, now + sylDur);
 
-      // Vowel 'O -> Ohhh -> Ahhh' Formant 1 (~500 Hz -> 420 Hz -> 360 Hz)
-      const f1 = this.ctx.createBiquadFilter();
-      f1.type = 'bandpass';
-      f1.frequency.setValueAtTime(510, now);
-      f1.frequency.linearRampToValueAtTime(450, now + dur * 0.5);
-      f1.frequency.linearRampToValueAtTime(365, now + dur);
-      f1.Q.setValueAtTime(5.2, now);
+          // Vowel "Ah" Formants (F1 ~ 760 Hz, F2 ~ 1320 Hz)
+          const f1 = this.ctx.createBiquadFilter();
+          f1.type = 'bandpass';
+          f1.frequency.setValueAtTime(760, now);
+          f1.Q.setValueAtTime(4.8, now);
 
-      // Formant 2 (~880 Hz -> 780 Hz -> 680 Hz)
-      const f2 = this.ctx.createBiquadFilter();
-      f2.type = 'bandpass';
-      f2.frequency.setValueAtTime(890, now);
-      f2.frequency.linearRampToValueAtTime(790, now + dur * 0.5);
-      f2.frequency.linearRampToValueAtTime(680, now + dur);
-      f2.Q.setValueAtTime(5.8, now);
+          const f2 = this.ctx.createBiquadFilter();
+          f2.type = 'bandpass';
+          f2.frequency.setValueAtTime(1320, now);
+          f2.Q.setValueAtTime(5.5, now);
 
-      const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.001, now);
-      // Swells in as the tower starts leaning
-      gain.gain.linearRampToValueAtTime(0.085, now + 0.12);
-      // Sustains across the fall and peaks right as the tower crashes
-      gain.gain.linearRampToValueAtTime(0.105, now + dur * 0.55);
-      gain.gain.setValueAtTime(0.09, now + dur * 0.72);
-      // Long tail fade out after collapse
-      gain.gain.exponentialRampToValueAtTime(0.0008, now + dur);
+          const vGain = this.ctx.createGain();
+          const envelopeScale = Math.sin((Math.PI * (s + 1)) / (v.syllables + 1));
+          const peakVol = 0.035 + 0.045 * envelopeScale;
+          vGain.gain.setValueAtTime(0.001, now);
+          vGain.gain.linearRampToValueAtTime(peakVol, now + 0.018);
+          vGain.gain.exponentialRampToValueAtTime(0.0008, now + sylDur);
 
-      osc.connect(f1);
-      osc.connect(f2);
-      f1.connect(gain);
-      f2.connect(gain);
-      gain.connect(this.ctx.destination);
+          osc.connect(f1);
+          osc.connect(f2);
+          f1.connect(vGain);
+          f2.connect(vGain);
+          vGain.connect(this.ctx.destination);
 
-      vibratoOsc.start(now);
-      osc.start(now);
-      vibratoOsc.stop(now + dur + 0.04);
-      osc.stop(now + dur + 0.04);
+          osc.start(now);
+          osc.stop(now + sylDur + 0.01);
+
+          // Short breathy "H-" aspiration burst at the start of each "Ha!"
+          const bufLen = Math.floor(this.ctx.sampleRate * 0.028);
+          const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let j = 0; j < bufLen; j++) {
+            data[j] = (Math.random() * 2 - 1) * Math.exp(-j / (bufLen * 0.45));
+          }
+          const hNoise = this.ctx.createBufferSource();
+          hNoise.buffer = buf;
+          const hFilter = this.ctx.createBiquadFilter();
+          hFilter.type = 'bandpass';
+          hFilter.frequency.setValueAtTime(1450, now);
+          hFilter.Q.setValueAtTime(2.2, now);
+          const hGain = this.ctx.createGain();
+          hGain.gain.setValueAtTime(peakVol * 0.65, now);
+          hGain.gain.exponentialRampToValueAtTime(0.001, now + 0.028);
+          hNoise.connect(hFilter);
+          hFilter.connect(hGain);
+          hGain.connect(this.ctx.destination);
+          hNoise.start(now);
+        }, burstDelay);
+      }
     });
 
-    // 2. Stretched spoken "Ohhhhhhhhhhhhhhh!" via SpeechSynthesis if supported
+    // 2. Spoken laughter via SpeechSynthesis spanning the tower fall and collapse
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance('Ohhhhhhhhhhhhhhh!');
-        utter.pitch = 0.65;
-        utter.rate = 0.42; // Slow, drawn-out stretch across the fall
+        const utter = new SpeechSynthesisUtterance('Hahaha! Ahahahaha! Hahaha!');
+        utter.pitch = 1.25;
+        utter.rate = 0.92;
         utter.volume = 0.95;
         window.speechSynthesis.speak(utter);
       } catch (_) {}

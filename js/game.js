@@ -1321,12 +1321,10 @@ window.initJengaGame = function () {
       updateBlockInspector(hitBlock, allowed);
 
       if (state.interactionMode === 'orbit') {
-        window.JengaAudio.playWoodTap(1.1, 0.15);
         return;
       }
 
       if (!allowed) {
-        window.JengaAudio.playWoodTap(0.6, 0.2);
         if (state.committedBlock && state.committedBlock.id !== hitBlock.id) {
           showToast('One-hand rule: Finish pulling the block you already started moving!');
         } else {
@@ -1346,11 +1344,6 @@ window.initJengaGame = function () {
           b.body.wakeUp();
         }
       });
-
-      window.JengaAudio.playWoodTap(
-        hitBlock.tension === 'loose' ? 1.25 : hitBlock.tension === 'medium' ? 1.0 : 0.78,
-        0.3
-      );
 
       blockDragStartPos.set(
         hitBlock.body.position.x,
@@ -1410,8 +1403,6 @@ window.initJengaGame = function () {
         b.body.position.x - b.initialPos.x,
         b.body.position.z - b.initialPos.z
       );
-
-      window.JengaAudio.playWoodSlide(b.resistance);
 
       if (b.pullDistance > 1.8 && !state.committedBlock) {
         state.committedBlock = b;
@@ -1501,8 +1492,6 @@ window.initJengaGame = function () {
     block.extracted = true;
     state.turnPhase = 'STACKING';
     highlightLine.visible = false;
-
-    window.JengaAudio.playWoodTap(1.35, 0.35);
 
     const status = getLayerStatus();
     const targetLayer = status.targetPlacementLayer;
@@ -1603,8 +1592,6 @@ window.initJengaGame = function () {
     block.body.wakeUp();
     block.initialPos.set(x, targetLayer * BLOCK_HEIGHT + BLOCK_HEIGHT / 2, z);
 
-    window.JengaAudio.playBlockPlace();
-
     if (!fromNetwork) {
       broadcastMove({
         type: 'MOVE_COMPLETE',
@@ -1630,7 +1617,6 @@ window.initJengaGame = function () {
   }
 
   function completeTurnSuccess() {
-    window.JengaAudio.playTurnSuccess();
     state.players[state.currentPlayerIdx].moves += 1;
     state.blocksMovedTotal += 1;
     state.turnNumber += 1;
@@ -1692,12 +1678,6 @@ window.initJengaGame = function () {
       elStabilityText.textContent = 'Shifting Weight...';
     } else {
       elStabilityText.textContent = 'CRITICAL TILT!';
-      // Start the stretched "Ohhhhhhhhhhhhhhh!" vocal reaction as soon as the tower begins tipping
-      window.JengaAudio.playBreakOh(2.35);
-    }
-
-    if (fallenCount === 1) {
-      window.JengaAudio.playBreakOh(2.35);
     }
 
     if (fallenCount >= 2) {
@@ -1712,7 +1692,7 @@ window.initJengaGame = function () {
     controls.enabled = true;
     hideGhostSlots();
 
-    // Plays stretched "Ohhhhhhhhhhhhhhh!" vocal reaction + collapsing wood blocks clatter
+    // Only play laughter + collapsing wood blocks clatter when the tower collapses and is falling
     window.JengaAudio.playTowerCollapse();
 
     const loser = state.players[state.currentPlayerIdx];
@@ -1720,7 +1700,7 @@ window.initJengaGame = function () {
       (state.currentPlayerIdx - 1 + state.players.length) % state.players.length;
     const winner = state.players[winnerIdx];
 
-    showToast(`Ohhhhhhhhhhhhhhh! ${loser.name} collapsed the tower.`);
+    showToast(`Hahaha! ${loser.name} collapsed the tower!`);
     updateHUD();
 
     setTimeout(() => {
@@ -1729,7 +1709,7 @@ window.initJengaGame = function () {
       const desc = document.getElementById('gameover-desc');
 
       if (state.players.length === 1) {
-        title.textContent = 'Ohhhhhhhhhhhhhhh! Tower Collapsed';
+        title.textContent = 'Hahaha! Tower Collapsed';
         desc.textContent = `You stacked the tower to ${
           state.towerPeakLayer + 1
         } stories (${state.blocksMovedTotal} blocks moved) before it tumbled.`;
@@ -1737,12 +1717,12 @@ window.initJengaGame = function () {
         // Play "Yey!" victory celebration sound + fanfare + applause for the winner!
         window.JengaAudio.playWinYey();
         title.textContent = `Yey! ${winner.name} Wins`;
-        desc.textContent = `Ohhhhhhhhhhhhhhh! The tower collapsed on ${loser.name}'s turn at ${
+        desc.textContent = `Hahaha! The tower collapsed on ${loser.name}'s turn at ${
           state.towerPeakLayer + 1
         } stories high (${state.blocksMovedTotal} successful moves).`;
       }
       modal.classList.add('open');
-    }, 2050);
+    }, 2400);
   }
 
   // UI & HUD Updates
