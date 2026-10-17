@@ -505,8 +505,8 @@ window.initJengaGame = function () {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const fullW = img.naturalWidth || 980;
-      const fullH = img.naturalHeight || 542;
+      const fullW = img.naturalWidth || 735;
+      const fullH = img.naturalHeight || 511;
       const halfW = Math.floor(fullW / 2);
 
       function buildSinglePalmSideTexture(srcX, srcW) {
@@ -519,25 +519,24 @@ window.initJengaGame = function () {
         const imgData = ctx.getImageData(0, 0, srcW, fullH);
         const d = imgData.data;
 
-        // Chroma-key out the white studio background while preserving natural skin tones & soft edges
+        // Chroma-key out only the neutral white studio background while keeping pale fingernails
+        // and warm skin tones 100% opaque and vivid.
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i];
           const g = d[i + 1];
           const b = d[i + 2];
 
-          const maxC = Math.max(r, g, b);
+          const warmth = r - b; // Skin and fingernails have positive red-blue warmth; white background is ~0
           const minC = Math.min(r, g, b);
-          const saturation = maxC - minC;
-          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
 
-          // Pure white / near-white background pixels have high luma and low saturation
-          if (luma > 242 && saturation < 18) {
+          if (minC > 244 && warmth < 10) {
+            // Pure white background
             d[i + 3] = 0;
-          } else if (luma > 218 && saturation < 36) {
-            // Smooth anti-aliased feather along the contour of the fingers and palm
-            const lumaFactor = (244 - luma) / 26;
-            const satFactor = saturation / 36;
-            const alpha = Math.max(0, Math.min(1, Math.max(lumaFactor, satFactor)));
+          } else if (minC > 228 && warmth < 18) {
+            // Smooth anti-aliased edge feathering around the fingers
+            const warmAlpha = Math.max(0, (warmth - 4) / 14);
+            const darkAlpha = Math.max(0, (246 - minC) / 18);
+            const alpha = Math.max(0, Math.min(1, Math.max(warmAlpha, darkAlpha)));
             d[i + 3] = Math.round(alpha * 255);
           } else {
             d[i + 3] = 255;
@@ -571,19 +570,21 @@ window.initJengaGame = function () {
   }
 
   /**
-   * Builds BOTH Open Palms (Left Palm & Right Palm) using the user's custom dual-palm image,
-   * resting on the active player's highlighted side of the circular table with subdivided
+   * Builds BOTH Hands (Left & Right, palms resting down on the table) using the user's custom image,
+   * positioned on the active player's highlighted side of the circular table with subdivided
    * finger meshes for rhythmic "swag" finger-tapping & wrist groove animation.
    */
-  function createOpenPalmHandMesh(playerColorHex) {
+  function createOpenPalmHandMesh() {
     ensureDualPalmTexturesLoaded();
 
     const bothHandsGroup = new THREE.Group();
 
     const leftMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.55,
-      metalness: 0.04,
+      emissive: 0x2a1c12,
+      emissiveIntensity: 0.35,
+      roughness: 0.48,
+      metalness: 0.02,
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: true
@@ -591,24 +592,26 @@ window.initJengaGame = function () {
 
     const rightMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.55,
-      metalness: 0.04,
+      emissive: 0x2a1c12,
+      emissiveIntensity: 0.35,
+      roughness: 0.48,
+      metalness: 0.02,
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: true
     });
 
     const leftShadowMat = new THREE.MeshBasicMaterial({
-      color: 0x090502,
+      color: 0x080401,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.38,
       depthWrite: false
     });
 
     const rightShadowMat = new THREE.MeshBasicMaterial({
-      color: 0x090502,
+      color: 0x080401,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.38,
       depthWrite: false
     });
 
@@ -618,29 +621,19 @@ window.initJengaGame = function () {
       pendingDualPalmMaterials.push({ leftMat, rightMat, leftShadowMat, rightShadowMat });
     }
 
-    const sleeveMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(playerColorHex),
-      roughness: 0.5,
-      metalness: 0.08
-    });
-
-    const goldMat = new THREE.MeshStandardMaterial({
-      color: 0xffc65c,
-      roughness: 0.22,
-      metalness: 0.88
-    });
-
     function buildSinglePalmPlane(palmMat, shadowMat, sideSign) {
       const palmUnit = new THREE.Group();
-      // Position Left Palm (-6.9) and Right Palm (+6.9) framing the player's turn plaque on the table
-      palmUnit.position.set(sideSign * 6.9, 0.22, 20.5);
-      // Angle both open palms slightly inward toward the Jenga tower center
-      palmUnit.rotation.y = sideSign * 0.22;
+      // Position Left Hand (-7.2) and Right Hand (+7.2) clearly on the player's side of the circular table
+      palmUnit.position.set(sideSign * 7.2, 0.25, 20.2);
+      // Angle both hands naturally inward toward the Jenga tower
+      palmUnit.rotation.y = sideSign * 0.18;
 
-      // Subdivided plane so individual fingers (top half of image) ripple & tap with swag!
+      // Subdivided plane matching the 367x511 hand aspect ratio so fingers ripple & tap with swag!
       const segX = 20;
       const segY = 20;
-      const geo = new THREE.PlaneGeometry(6.8, 7.6, segX, segY);
+      const handW = 8.2;
+      const handH = 11.2;
+      const geo = new THREE.PlaneGeometry(handW, handH, segX, segY);
       geo.rotateX(-Math.PI / 2);
 
       // Store base vertex coordinates so we can animate a 4-finger drumming wave
@@ -650,38 +643,24 @@ window.initJengaGame = function () {
       geo.userData.basePositions = basePositions;
 
       const mesh = new THREE.Mesh(geo, palmMat);
-      mesh.position.y = 0.28;
+      mesh.position.y = 0.26;
+      mesh.renderOrder = 6;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       palmUnit.add(mesh);
 
-      // Soft contact shadow directly underneath each open palm on the wood tabletop
-      const shadowGeo = new THREE.PlaneGeometry(6.8, 7.6);
+      // Soft contact shadow directly underneath each hand on the wood tabletop
+      const shadowGeo = new THREE.PlaneGeometry(handW, handH);
       shadowGeo.rotateX(-Math.PI / 2);
       const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
-      shadowMesh.position.set(0.12 * sideSign, 0.04, 0.16);
+      shadowMesh.position.set(0.14 * sideSign, 0.05, 0.18);
+      shadowMesh.renderOrder = 4;
       palmUnit.add(shadowMesh);
-
-      // Player-colored wristband / sleeve cuff accent at the base of each palm
-      const cuffGeo = new THREE.CylinderGeometry(1.35, 1.52, 1.65, 20);
-      cuffGeo.rotateX(Math.PI / 2);
-      const cuffMesh = new THREE.Mesh(cuffGeo, sleeveMat);
-      cuffMesh.scale.set(1.18, 0.36, 1.0);
-      cuffMesh.position.set(0, 0.26, 3.85);
-      palmUnit.add(cuffMesh);
-
-      // Gold luxury wrist chain / watch accent on each wrist
-      const goldBandGeo = new THREE.CylinderGeometry(1.3, 1.34, 0.34, 20);
-      goldBandGeo.rotateX(Math.PI / 2);
-      const goldBand = new THREE.Mesh(goldBandGeo, goldMat);
-      goldBand.scale.set(1.18, 0.38, 1.0);
-      goldBand.position.set(0, 0.28, 3.02);
-      palmUnit.add(goldBand);
 
       return { palmUnit, mesh, shadowMesh, geo };
     }
 
-    // Create BOTH Left Open Palm (-1) and Right Open Palm (+1)
+    // Create BOTH Left Hand (-1) and Right Hand (+1)
     const leftPalm = buildSinglePalmPlane(leftMat, leftShadowMat, -1);
     const rightPalm = buildSinglePalmPlane(rightMat, rightShadowMat, 1);
 
@@ -2161,23 +2140,23 @@ window.initJengaGame = function () {
 
           for (let k = 0; k < posAttr.count; k++) {
             const idx = k * 3;
-            const bx = base[idx];     // -3.4 .. +3.4 across the width of the hand
+            const bx = base[idx];     // -4.1 .. +4.1 across the width of the hand
             const by = base[idx + 1]; // base Y (0)
-            const bz = base[idx + 2]; // -3.8 (fingertips) .. +3.8 (wrist)
+            const bz = base[idx + 2]; // -5.6 (fingertips) .. +5.6 (wrist)
 
-            // Finger region is bz < 0.35 (pointing toward the Jenga tower)
-            if (bz < 0.35) {
+            // Finger region is bz < 0.6 (pointing toward the Jenga tower)
+            if (bz < 0.6) {
               // Normalized finger reach from knuckle (0) to fingertip (1)
-              const reach = Math.min(1, Math.max(0, (0.35 - bz) / 4.15));
+              const reach = Math.min(1, Math.max(0, (0.6 - bz) / 6.2));
               // Normalized lateral position across the 4 fingers + thumb (-1 .. +1)
-              const lateral = (bx / 3.4) * sideSign;
+              const lateral = (bx / 4.1) * sideSign;
               const wavePhase = t * 1.35 - lateral * 2.1;
               const rawWave = Math.sin(wavePhase);
               const tapLift = rawWave > 0 ? Math.pow(rawWave, 2.4) : 0;
 
               // Lift the fingers and curl fingertips slightly forward/down on the tap beat
-              posAttr.array[idx + 1] = by + reach * reach * tapLift * 0.58;
-              posAttr.array[idx + 2] = bz + reach * tapLift * 0.14;
+              posAttr.array[idx + 1] = by + reach * reach * tapLift * 0.65;
+              posAttr.array[idx + 2] = bz + reach * tapLift * 0.16;
             } else {
               posAttr.array[idx + 1] = by;
               posAttr.array[idx + 2] = bz;
