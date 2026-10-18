@@ -15,17 +15,96 @@ class SoundEngine {
     this.laughAudio = null;
     this.isDecodingLaugh = false;
     this.pendingLaughPlay = false;
+    this.mobileUnlocked = false;
+    this.laughElementUnlocked = false;
     this.preloadLaughElement();
+    this.bindMobileAudioUnlock();
   }
 
   preloadLaughElement() {
     try {
       const audio = new Audio();
       audio.preload = 'auto';
+      audio.playsInline = true;
+      audio.setAttribute('playsinline', '');
+      audio.setAttribute('webkit-playsinline', '');
       audio.src = window.JENGA_LAUGH_MP3 || 'assets/laugh.mp3';
       audio.load();
       this.laughAudio = audio;
     } catch (_) {}
+  }
+
+  /**
+   * Mobile browsers (iOS Safari, Android Chrome) ignore Web Audio / HTML5 Audio
+   * when OrbitControls calls preventDefault() on pointerdown.
+   * Listening to touchstart, touchend, pointerup, and click at the document level
+   * unlocks AudioContext with a 1-sample silent buffer and primes the HTML5 Audio element.
+   */
+  bindMobileAudioUnlock() {
+    const unlockHandler = () => {
+      if (!this.enabled) return;
+
+      // Enable playback audio session on iOS 17+ so audio works even if mute switch is on
+      if (typeof navigator !== 'undefined' && navigator.audioSession) {
+        try {
+          navigator.audioSession.type = 'playback';
+        } catch (_) {}
+      }
+
+      this.init();
+
+      if (this.ctx) {
+        if (this.ctx.state !== 'running') {
+          try {
+            this.ctx.resume();
+          } catch (_) {}
+        }
+
+        if (!this.mobileUnlocked) {
+          try {
+            const silentBuf = this.ctx.createBuffer(1, 1, 22050);
+            const src = this.ctx.createBufferSource();
+            src.buffer = silentBuf;
+            src.connect(this.ctx.destination);
+            src.start(0);
+            if (this.ctx.state === 'running') {
+              this.mobileUnlocked = true;
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Prime HTML5 Audio element once on first user gesture so it can play later in requestAnimationFrame
+      if (this.laughAudio && !this.laughElementUnlocked) {
+        this.laughElementUnlocked = true;
+        try {
+          this.laughAudio.muted = true;
+          const p = this.laughAudio.play();
+          if (p && typeof p.then === 'function') {
+            p.then(() => {
+              if (!this.lastOhTime || performance.now() - this.lastOhTime > 2500) {
+                this.laughAudio.pause();
+                this.laughAudio.currentTime = 0;
+              }
+              this.laughAudio.muted = false;
+            }).catch(() => {
+              this.laughAudio.muted = false;
+              this.laughElementUnlocked = false;
+            });
+          } else {
+            this.laughAudio.pause();
+            this.laughAudio.currentTime = 0;
+            this.laughAudio.muted = false;
+          }
+        } catch (_) {
+          if (this.laughAudio) this.laughAudio.muted = false;
+        }
+      }
+    };
+
+    ['touchstart', 'touchend', 'pointerup', 'click', 'keydown'].forEach((evt) => {
+      window.addEventListener(evt, unlockHandler, { capture: true, passive: true });
+    });
   }
 
   decodeDataUriToBuffer(dataUri) {
@@ -41,8 +120,9 @@ class SoundEngine {
       for (let i = 0; i < len; i++) {
         bytes[i] = binary.charCodeAt(i);
       }
+      const arrayBuf = bytes.buffer.slice(0);
       this.ctx.decodeAudioData(
-        bytes.buffer,
+        arrayBuf,
         (decoded) => {
           this.laughBuffer = decoded;
           this.isDecodingLaugh = false;
@@ -63,6 +143,9 @@ class SoundEngine {
   startBufferLaugh() {
     if (!this.ctx || !this.laughBuffer || !this.enabled) return false;
     try {
+      if (this.ctx.state !== 'running') {
+        this.ctx.resume();
+      }
       if (this.laughSource) {
         try {
           this.laughSource.stop();
@@ -89,8 +172,10 @@ class SoundEngine {
         this.ctx = new AudioCtx();
       }
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+    if (this.ctx && this.ctx.state !== 'running') {
+      try {
+        this.ctx.resume();
+      } catch (_) {}
     }
     if (this.ctx && !this.laughBuffer && !this.isDecodingLaugh) {
       this.decodeDataUriToBuffer(window.JENGA_LAUGH_MP3);
@@ -354,6 +439,7 @@ class SoundEngine {
     // HTML5 Audio fallback
     if (this.laughAudio) {
       try {
+        this.laughAudio.muted = false;
         this.laughAudio.volume = 1.0;
         this.laughAudio.currentTime = 0;
         const p = this.laughAudio.play();
