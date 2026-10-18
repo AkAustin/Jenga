@@ -1273,30 +1273,50 @@ window.initJengaGame = function () {
   const blockDragStartPos = new THREE.Vector3();
   const blockGrabWorldPoint = new THREE.Vector3();
   let grabAxisT0 = 0;
+  let lastBlockOffsetAlong = 0;
   let isDraggingBlock = false;
 
   /**
-   * Computes the parameter `t` along the 3D line `L(t) = lineOrigin + t * lineAxis`
+   * Computes the signed parameter `t` along the 3D line `L(t) = lineOrigin + t * lineAxis`
    * that is closest to the current camera ray `R(s) = ray.origin + s * ray.direction`.
-   * Works reliably from all 360° angles without plane-grazing issues.
+   * Supports pulling in both directions (left or right / forward or back) depending on
+   * the player's moving direction from any 360° camera angle.
    */
   function getClosestAxisParamToRay(lineOrigin, lineAxis, ray) {
     const w0 = lineOrigin.clone().sub(ray.origin);
     const b = lineAxis.dot(ray.direction);
     const denom = 1.0 - b * b;
+    const dDotW0 = ray.direction.dot(w0);
+    const uDotW0 = lineAxis.dot(w0);
+
+    // Camera screen-right vector in world space to map left/right pointer movement accurately
+    const camForward = new THREE.Vector3();
+    camera.getWorldDirection(camForward);
+    const camRight = new THREE.Vector3().crossVectors(camForward, camera.up).normalize();
+    const rightDot = lineAxis.dot(camRight);
+
+    const camToBlock = lineOrigin.clone().sub(camera.position).normalize();
+    const signTowardCam = Math.sign(lineAxis.dot(camToBlock)) || 1;
+    const signRight = Math.abs(rightDot) > 0.001 ? Math.sign(rightDot) : 1;
+    const horizPull = (pointer.x - pointerStart.x) * signRight * 16.0;
+    const vertPull = (pointer.y - pointerStart.y) * signTowardCam * 16.0;
 
     if (denom < 0.06) {
       // Looking nearly straight down the barrel of the block:
-      // Use vertical/horizontal screen pointer delta to pull toward camera
-      const camToBlock = lineOrigin.clone().sub(camera.position).normalize();
-      const signTowardCam = Math.sign( lineAxis.dot(camToBlock) ) || 1;
-      const screenPull = (pointerStart.y - pointer.y) * 14.0;
-      return grabAxisT0 - signTowardCam * screenPull;
+      // Combine horizontal (left/right) and vertical pointer delta
+      return grabAxisT0 + horizPull + vertPull;
     }
 
-    const dDotW0 = ray.direction.dot(w0);
-    const uDotW0 = lineAxis.dot(w0);
-    return (uDotW0 * b - dDotW0) / denom;
+    const rayT = (b * dDotW0 - uDotW0) / denom;
+
+    // When the camera is nearly aligned with the block's horizontal axis (|rightDot| < 0.25),
+    // blend in horizontal pointer delta so dragging left or right still slides the block bidirectionally
+    if (Math.abs(rightDot) < 0.25) {
+      const assistWeight = 1.0 - Math.abs(rightDot) / 0.25;
+      return rayT + horizPull * assistWeight;
+    }
+
+    return rayT;
   }
 
   function updatePointer(e) {
@@ -1407,6 +1427,7 @@ window.initJengaGame = function () {
         : new THREE.Vector3(1, 0, 0);
       grabAxisT0 = 0;
       grabAxisT0 = getClosestAxisParamToRay(blockGrabWorldPoint, axis, raycaster.ray);
+      lastBlockOffsetAlong = blockDragStartPos.clone().sub(hitBlock.initialPos).dot(axis);
 
       updateHUD();
     }
@@ -1429,15 +1450,18 @@ window.initJengaGame = function () {
       const alongDist = currentT - grabAxisT0;
 
       const damping = 1.0 - b.resistance * 0.42;
-      const effectiveAlong = THREE.MathUtils.clamp(
-        alongDist * damping,
+      const startOffsetAlong = blockDragStartPos.clone().sub(b.initialPos).dot(axis);
+      const totalOffsetAlong = THREE.MathUtils.clamp(
+        startOffsetAlong + alongDist * damping,
         -BLOCK_LENGTH * 1.15,
         BLOCK_LENGTH * 1.15
       );
+      const stepDeltaAlong = totalOffsetAlong - lastBlockOffsetAlong;
+      lastBlockOffsetAlong = totalOffsetAlong;
 
-      const targetPos = blockDragStartPos
+      const targetPos = b.initialPos
         .clone()
-        .addScaledVector(axis, effectiveAlong);
+        .addScaledVector(axis, totalOffsetAlong);
 
       b.body.wakeUp();
       b.body.position.x = targetPos.x;
@@ -1445,8 +1469,8 @@ window.initJengaGame = function () {
       b.body.velocity.set(0, 0, 0);
       b.body.angularVelocity.set(0, 0, 0);
 
-      if (b.resistance > 0.4 && Math.abs(effectiveAlong) > 0.15) {
-        applyNeighborFrictionTug(b, axis, effectiveAlong);
+      if (b.resistance > 0.4 && Math.abs(stepDeltaAlong) > 0.01) {
+        applyNeighborFrictionTug(b, axis, stepDeltaAlong);
       }
 
       b.pullDistance = Math.hypot(
@@ -1533,9 +1557,10 @@ window.initJengaGame = function () {
     }
   }
 
-  function applyNeighborFrictionTug(pulledBlock, axis, alongDist) {
-    const sign = Math.sign(alongDist) || 1;
-    const forceMag = (pulledBlock.resistance - 0.3) * 0.026;
+  function applyNeighborFrictionTug(pulledBlock, axis, stepDeltaAlong) {
+    const sign = Math.sign(stepDeltaAlong) || 1;
+    const moveFactor = Math.min(1.5, Math.abs(stepDeltaAlong) * 4.0);
+    const forceMag = (pulledBlock.resistance - 0.3) * 0.022 * moveFactor;
 
     for (const other of blocks) {
       if (other.id === pulledBlock.id) continue;
@@ -1839,6 +1864,39 @@ window.initJengaGame = function () {
     elMobileBlockPill.classList.add('active');
   }
 
+  // Mobile Popover Menu Management (Camera View, Game Menu, Table/Stability Panel)
+  const elHudBottom = document.getElementById('hud-bottom');
+  const elHudActionsMenu = document.getElementById('hud-actions-menu');
+  const elSidePanelLeft = document.getElementById('side-panel-left');
+  const elActionCoach = document.getElementById('action-coach');
+  const btnMobileCam = document.getElementById('btn-mobile-cam');
+  const elMobileCamLabel = document.getElementById('mobile-cam-label');
+  const btnMobileMenu = document.getElementById('btn-mobile-menu');
+  const btnMobileTable = document.getElementById('btn-mobile-table');
+
+  const VIEW_STYLE_LABELS = {
+    iso: '45° Corner',
+    seat: 'Player Seat',
+    eye: 'Eye Level',
+    top: 'Top Stack',
+    wide: 'Wide Table'
+  };
+
+  function closeAllMobileMenus() {
+    if (elHudBottom) elHudBottom.classList.remove('mobile-cam-open');
+    if (elHudActionsMenu) elHudActionsMenu.classList.remove('mobile-open');
+    if (elSidePanelLeft) elSidePanelLeft.classList.remove('mobile-open');
+    if (btnMobileCam) btnMobileCam.setAttribute('aria-expanded', 'false');
+    if (btnMobileMenu) {
+      btnMobileMenu.classList.remove('active');
+      btnMobileMenu.setAttribute('aria-expanded', 'false');
+    }
+    if (btnMobileTable) {
+      btnMobileTable.classList.remove('active');
+      btnMobileTable.setAttribute('aria-expanded', 'false');
+    }
+  }
+
   function updateHUD() {
     const activePlayer = state.players[state.currentPlayerIdx];
     elTurnPlayerName.textContent = `${activePlayer.name}'s Turn`;
@@ -1847,6 +1905,10 @@ window.initJengaGame = function () {
 
     elStatHeight.textContent = `${state.towerPeakLayer + 1}`;
     elStatMoves.textContent = `${state.blocksMovedTotal}`;
+
+    if (elActionCoach) {
+      elActionCoach.classList.toggle('stacking-active', state.turnPhase === 'STACKING');
+    }
 
     if (state.turnPhase === 'SELECT') {
       elTurnPhaseText.textContent = 'Step 1: Pull a loose block';
@@ -1895,6 +1957,7 @@ window.initJengaGame = function () {
         const seatRad =
           (idx * 2 * Math.PI) / state.players.length + 0.12;
         applyCameraViewStyle('seat', seatRad, false);
+        closeAllMobileMenus();
         showToast(`Camera aligned to ${p.name}'s seat`);
       });
       elPlayerList.appendChild(row);
@@ -1990,6 +2053,10 @@ window.initJengaGame = function () {
       );
     });
 
+    if (elMobileCamLabel && VIEW_STYLE_LABELS[styleName]) {
+      elMobileCamLabel.textContent = VIEW_STYLE_LABELS[styleName];
+    }
+
     const baseDist = getIdealCameraDistance();
     const currentDeg = getCameraAzimuthDeg();
     let rad =
@@ -2025,8 +2092,9 @@ window.initJengaGame = function () {
       camY = midY;
       targetY = midY - 0.2;
     } else if (styleName === 'top') {
-      radiusXZ = 15.5;
-      camY = topY + 19.5;
+      const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+      radiusXZ = aspect < 0.7 ? 17.5 : 15.5;
+      camY = topY + (aspect < 0.7 ? 22.5 : 19.5);
       targetY = Math.max(12, topY - 1.5);
     } else if (styleName === 'wide') {
       radiusXZ = baseDist * 1.36;
@@ -2051,7 +2119,84 @@ window.initJengaGame = function () {
         state.savedPreStackViewStyle = styleName;
       }
       applyCameraViewStyle(styleName, null, false);
+      if (elHudBottom) {
+        elHudBottom.classList.remove('mobile-cam-open');
+      }
+      if (btnMobileCam) {
+        btnMobileCam.setAttribute('aria-expanded', 'false');
+      }
     });
+  });
+
+  // Mobile Menu Buttons (Camera View, Top Menu, Table & Stability Drawer)
+  if (btnMobileCam && elHudBottom) {
+    btnMobileCam.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = !elHudBottom.classList.contains('mobile-cam-open');
+      closeAllMobileMenus();
+      if (willOpen) {
+        elHudBottom.classList.add('mobile-cam-open');
+        btnMobileCam.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  const btnCloseCamMenu = document.getElementById('btn-close-cam-menu');
+  if (btnCloseCamMenu) {
+    btnCloseCamMenu.addEventListener('click', () => closeAllMobileMenus());
+  }
+
+  if (btnMobileMenu && elHudActionsMenu) {
+    btnMobileMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = !elHudActionsMenu.classList.contains('mobile-open');
+      closeAllMobileMenus();
+      if (willOpen) {
+        elHudActionsMenu.classList.add('mobile-open');
+        btnMobileMenu.classList.add('active');
+        btnMobileMenu.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  const btnCloseTopMenu = document.getElementById('btn-close-top-menu');
+  if (btnCloseTopMenu) {
+    btnCloseTopMenu.addEventListener('click', () => closeAllMobileMenus());
+  }
+
+  if (btnMobileTable && elSidePanelLeft) {
+    btnMobileTable.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = !elSidePanelLeft.classList.contains('mobile-open');
+      closeAllMobileMenus();
+      if (willOpen) {
+        elSidePanelLeft.classList.add('mobile-open');
+        btnMobileTable.classList.add('active');
+        btnMobileTable.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  const btnCloseTablePanel = document.getElementById('btn-close-table-panel');
+  if (btnCloseTablePanel) {
+    btnCloseTablePanel.addEventListener('click', () => closeAllMobileMenus());
+  }
+
+  document.addEventListener('pointerdown', (e) => {
+    const target = e.target;
+    if (!target || typeof target.closest !== 'function') return;
+    if (
+      target.closest('#camera-view-menu') ||
+      target.closest('#btn-mobile-cam') ||
+      target.closest('.orbit-slider-wrap') ||
+      target.closest('#hud-actions-menu') ||
+      target.closest('#btn-mobile-menu') ||
+      target.closest('#side-panel-left') ||
+      target.closest('#btn-mobile-table')
+    ) {
+      return;
+    }
+    closeAllMobileMenus();
   });
 
   const btnAutoCam = document.getElementById('btn-auto-cam');
@@ -2202,6 +2347,7 @@ window.initJengaGame = function () {
   const lobbyModal = document.getElementById('lobby-modal');
 
   document.getElementById('btn-rules').addEventListener('click', () => {
+    closeAllMobileMenus();
     rulesModal.classList.add('open');
   });
 
@@ -2210,6 +2356,7 @@ window.initJengaGame = function () {
   });
 
   document.getElementById('btn-reset').addEventListener('click', () => {
+    closeAllMobileMenus();
     gameOverModal.classList.remove('open');
     state.players.forEach((p) => (p.moves = 0));
     state.currentPlayerIdx = 0;
@@ -2228,6 +2375,7 @@ window.initJengaGame = function () {
 
   // Players & Chairs Modal Setup (1 to 4 Players)
   document.getElementById('btn-mode').addEventListener('click', () => {
+    closeAllMobileMenus();
     lobbyModal.classList.add('open');
   });
   document.getElementById('btn-close-lobby').addEventListener('click', () => {
@@ -2250,6 +2398,7 @@ window.initJengaGame = function () {
     const isInput = tag === 'INPUT' || tag === 'TEXTAREA';
 
     if (e.key === 'Escape') {
+      closeAllMobileMenus();
       lobbyModal.classList.remove('open');
       rulesModal.classList.remove('open');
       return;
@@ -2492,6 +2641,7 @@ window.initJengaGame = function () {
 
   // Pointer & Resize Event Listeners
   renderer.domElement.addEventListener('pointerdown', (e) => {
+    closeAllMobileMenus();
     camAnimToken++;
     onPointerDown(e);
   });
@@ -2500,6 +2650,9 @@ window.initJengaGame = function () {
   window.addEventListener('pointercancel', onPointerUp);
 
   window.addEventListener('resize', () => {
+    if (window.innerWidth > 960) {
+      closeAllMobileMenus();
+    }
     camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -2649,7 +2802,40 @@ window.initJengaGame = function () {
       applyCameraViewStyle(prevStyle, null, true);
       assert('Functional', 'All 5 Camera View Angle presets switch cleanly', stylesOk);
 
-      // 3. USABILITY TESTS (DOM Controls, Labels, Touch Mode, Modals)
+      // Test bidirectional block pulling (left vs right pointer movement) for both even and odd layers
+      const testBlocks = [
+        blocks.find((b) => b.layer === 8 && b.slot === 1), // Even layer (Z axis)
+        blocks.find((b) => b.layer === 9 && b.slot === 1)  // Odd layer (X axis)
+      ];
+      const biDirOk = testBlocks.every((tb) => {
+        if (!tb) return false;
+        const axis = tb.isEven ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        const grabPt = tb.initialPos.clone();
+        const centerNdc = grabPt.clone().project(camera);
+        pointerStart.set(centerNdc.x, centerNdc.y);
+        pointer.copy(pointerStart);
+        raycaster.setFromCamera(pointerStart, camera);
+        grabAxisT0 = 0;
+        const t0 = getClosestAxisParamToRay(grabPt, axis, raycaster.ray);
+        grabAxisT0 = t0;
+
+        pointer.set(centerNdc.x - 0.25, centerNdc.y);
+        raycaster.setFromCamera(pointer, camera);
+        const deltaLeft = getClosestAxisParamToRay(grabPt, axis, raycaster.ray) - t0;
+
+        pointer.set(centerNdc.x + 0.25, centerNdc.y);
+        raycaster.setFromCamera(pointer, camera);
+        const deltaRight = getClosestAxisParamToRay(grabPt, axis, raycaster.ray) - t0;
+
+        return deltaLeft * deltaRight < 0 && Math.abs(deltaLeft) > 2.0 && Math.abs(deltaRight) > 2.0;
+      });
+      assert(
+        'Functional',
+        'Bidirectional block pulling (both left and right depending on pointer movement)',
+        biDirOk
+      );
+
+      // 3. USABILITY TESTS (DOM Controls, Labels, Touch Mode, Mobile Menu Popovers)
       const hudBtns = Array.from(document.querySelectorAll('.hud-actions .btn'));
       assert(
         'Usability',
@@ -2660,6 +2846,24 @@ window.initJengaGame = function () {
         'Usability',
         '360° Orbit slider, compass readout, and Pull/Orbit mode switches active',
         Boolean(elOrbitSlider && elCompassReadout && btnModePull && btnModeOrbit)
+      );
+
+      // Test mobile menu buttons (Camera View button, Top Menu button, Table Info button)
+      btnMobileCam.click();
+      const camMenuOpened = elHudBottom.classList.contains('mobile-cam-open');
+      btnMobileMenu.click();
+      const topMenuOpened =
+        elHudActionsMenu.classList.contains('mobile-open') &&
+        !elHudBottom.classList.contains('mobile-cam-open');
+      btnMobileTable.click();
+      const tableMenuOpened =
+        elSidePanelLeft.classList.contains('mobile-open') &&
+        !elHudActionsMenu.classList.contains('mobile-open');
+      closeAllMobileMenus();
+      assert(
+        'Usability',
+        'Mobile Camera View, Top Menu, and Table Info buttons toggle popovers cleanly',
+        camMenuOpened && topMenuOpened && tableMenuOpened
       );
 
       const passedCount = results.filter((r) => r.passed).length;

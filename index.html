@@ -56,7 +56,21 @@
       </div>
     </div>
 
-    <div class="hud-actions">
+    <!-- Mobile Compact Top Triggers (Table Status & Game Menu) -->
+    <div class="mobile-top-triggers">
+      <button id="btn-mobile-table" class="btn mobile-trigger-btn" aria-expanded="false" aria-controls="side-panel-left" title="View Seated Players, Tower Stability &amp; Wood Legend">
+        <span aria-hidden="true">🪑</span> <span class="mobile-trigger-label">Table</span>
+      </button>
+      <button id="btn-mobile-menu" class="btn mobile-trigger-btn" aria-expanded="false" aria-controls="hud-actions-menu" title="Open Game Menu">
+        <span id="mobile-menu-icon" aria-hidden="true">☰</span> <span class="mobile-trigger-label">Menu</span>
+      </button>
+    </div>
+
+    <div id="hud-actions-menu" class="hud-actions">
+      <div class="mobile-popover-header">
+        <span>Game Menu</span>
+        <button id="btn-close-top-menu" class="popover-close-btn" type="button" aria-label="Close Menu">✕</button>
+      </div>
       <button id="btn-mode" class="btn btn-primary" aria-label="Players and Seating" title="Switch Players (Spawns Chairs Around Table) or Create Online Room">
         <span aria-hidden="true">⊞</span> <span class="btn-label">Players</span>
       </button>
@@ -79,8 +93,12 @@
   <div id="mobile-block-pill" class="mobile-block-pill"></div>
 
   <!-- Left Panel: Players (Chairs) & Live Block Tension / 3-Wood Legend -->
-  <aside class="side-panel-left">
+  <aside id="side-panel-left" class="side-panel-left">
     <div class="panel-card">
+      <div class="mobile-popover-header">
+        <span>Table &amp; Tower Info</span>
+        <button id="btn-close-table-panel" class="popover-close-btn" type="button" aria-label="Close Table Info">✕</button>
+      </div>
       <h3>
         <span>Seated at Table</span>
         <span id="seat-count-badge" style="font-size:10px; color:#d4a359;">2 Chairs</span>
@@ -111,9 +129,13 @@
   <div id="toast-container" class="toast-container"></div>
 
   <!-- Bottom HUD: Camera View Angle Styles, 360° Turntable Controls, Touch Mode Switch & Turn Coach -->
-  <footer class="hud-bottom">
-    <!-- Camera View Angle Style Presets (Clean Architectural Switcher) -->
-    <div class="view-angle-dock" aria-label="Camera View Angle Styles">
+  <footer id="hud-bottom" class="hud-bottom">
+    <!-- Camera View Angle Style Presets (Desktop Bar / Mobile Popover Menu) -->
+    <div id="camera-view-menu" class="view-angle-dock" aria-label="Camera View Angle Styles">
+      <div class="mobile-popover-header">
+        <span>Camera View Presets</span>
+        <button id="btn-close-cam-menu" class="popover-close-btn" type="button" aria-label="Close Camera View Menu">✕</button>
+      </div>
       <span class="view-dock-label">CAMERA VIEW</span>
       <button class="view-style-btn active" data-view-style="iso" title="Classic 45° Corner Isometric View — see two sides of the tower at once">
         45° Corner
@@ -138,14 +160,21 @@
     <div class="bottom-row-main">
       <!-- 360° Camera Turntable Controls -->
       <div class="orbit-360-panel">
-        <button id="cam-rot-left" class="btn" title="Rotate 45° Left around Tower">↺ 45°</button>
+        <!-- Mobile Camera View Button (Opens Camera View Menu on mobile instead of a long bar) -->
+        <button id="btn-mobile-cam" class="btn mobile-cam-btn" type="button" aria-expanded="false" aria-controls="camera-view-menu" title="Open Camera View Menu">
+          <span aria-hidden="true">🎥</span>
+          <span id="mobile-cam-label">45° Corner</span>
+          <span class="cam-caret" aria-hidden="true">▴</span>
+        </button>
+
+        <button id="cam-rot-left" class="btn" title="Rotate 45° Left around Tower">↺ <span class="rot-deg-label">45°</span></button>
 
         <div class="orbit-slider-wrap" title="Drag to spin 360° around all 4 sides of the tower">
           <input id="orbit-slider" class="orbit-slider" type="range" min="0" max="360" value="45" />
           <span id="compass-readout" class="compass-readout" title="Click to snap to next 90° tower face">45° NE</span>
         </div>
 
-        <button id="cam-rot-right" class="btn" title="Rotate 45° Right around Tower">↻ 45°</button>
+        <button id="cam-rot-right" class="btn" title="Rotate 45° Right around Tower">↻ <span class="rot-deg-label">45°</span></button>
 
         <!-- Touch Mode Switch (Especially helpful on Mobile/Tablet) -->
         <div class="touch-mode-toggle" title="Switch 1-finger action between Pulling Blocks and 360° Camera Orbit">
@@ -155,7 +184,7 @@
       </div>
 
       <!-- Contextual Step Coach & Top Slot Picker -->
-      <div class="action-coach">
+      <div id="action-coach" class="action-coach">
         <span id="coach-badge" class="coach-step-badge">STEP 1 • EXTRACT</span>
         <span id="coach-text" class="coach-text">
           Drag any block below the top completed row along its length. Select a Camera View or orbit 360°.

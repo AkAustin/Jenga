@@ -895,100 +895,464 @@ input:focus-visible,
   }
 }
 
+/* Mobile Trigger Buttons & Popover Headers (Hidden on Desktop > 960px) */
+.mobile-top-triggers,
+.mobile-cam-btn,
+.mobile-popover-header {
+  display: none;
+}
+
+.mobile-popover-header {
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(235, 195, 140, 0.18);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--wood-light);
+}
+
+.popover-close-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(235, 195, 140, 0.25);
+  color: var(--text-muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.popover-close-btn:hover {
+  background: rgba(229, 152, 56, 0.22);
+  color: var(--text-main);
+}
+
 /* Responsive Tablet & Mobile Adaptability */
 @media (max-width: 960px) {
-  .side-panel-left {
+  /* 1. Single-Row Sleek Top HUD Bar */
+  .hud-top {
+    top: env(safe-area-inset-top, 8px);
+    margin-top: 4px;
+    left: 10px;
+    right: 10px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .brand-card {
+    padding: 7px 10px;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+
+  .brand-logo {
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+    border-radius: 8px;
+  }
+
+  .brand-title p {
     display: none;
   }
+
+  .brand-title h1 {
+    font-size: 13px;
+  }
+
+  .turn-banner {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 12px;
+    border-radius: 13px;
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .player-badge {
+    min-width: 0;
+    flex: 1;
+    gap: 8px;
+  }
+
+  .turn-info {
+    min-width: 0;
+  }
+
+  .turn-player-name,
+  .turn-phase-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .turn-player-name {
+    font-size: 13px;
+  }
+
+  .turn-phase-text {
+    font-size: 11px;
+  }
+
+  .tower-stats {
+    gap: 10px;
+    padding-left: 10px;
+    flex-shrink: 0;
+  }
+
+  .stat-value {
+    font-size: 13.5px;
+  }
+
+  .stat-label {
+    font-size: 8.5px;
+  }
+
+  /* 2. Mobile Top Menu & Table Trigger Buttons */
+  .mobile-top-triggers {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .mobile-trigger-btn {
+    padding: 8px 11px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    gap: 5px;
+  }
+
+  .mobile-trigger-btn.active {
+    background: rgba(229, 152, 56, 0.24);
+    border-color: var(--wood-accent);
+    color: var(--wood-light);
+  }
+
+  /* 3. Top Game Actions Menu Popover (Opened via Menu Button) */
+  .hud-actions {
+    display: none;
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 8px) + 56px);
+    right: 10px;
+    width: min(240px, calc(100vw - 20px));
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(22, 17, 13, 0.96);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(235, 195, 140, 0.35);
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.65);
+    z-index: 35;
+    animation: toastIn 0.18s ease;
+  }
+
+  .hud-actions.mobile-open {
+    display: flex;
+  }
+
+  .hud-actions .mobile-popover-header {
+    display: flex;
+  }
+
+  .hud-actions .btn {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    border-radius: 10px;
+  }
+
+  /* 4. Seated at Table & Stability Popover Drawer (Opened via Table Button) */
+  .side-panel-left {
+    display: none;
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 8px) + 56px);
+    right: 10px;
+    left: auto;
+    width: min(310px, calc(100vw - 20px));
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    z-index: 35;
+    animation: toastIn 0.18s ease;
+  }
+
+  .side-panel-left.mobile-open {
+    display: flex;
+  }
+
+  .side-panel-left .mobile-popover-header {
+    display: flex;
+  }
+
+  /* 5. Floating Block Inspector Pill & Toasts positioned cleanly below single-row top bar */
+  .mobile-block-pill {
+    top: calc(env(safe-area-inset-top, 8px) + 56px);
+  }
+
   .mobile-block-pill.active {
     display: block;
   }
-  .bottom-row-main {
-    flex-direction: column-reverse;
-    align-items: stretch;
+
+  .toast-container {
+    top: calc(env(safe-area-inset-top, 8px) + 58px);
+  }
+
+  /* 6. Camera View Button & Popover Menu at Bottom */
+  .hud-bottom {
+    left: 10px;
+    right: 10px;
+    bottom: env(safe-area-inset-bottom, 10px);
     gap: 8px;
   }
-  .action-coach {
-    max-width: 100%;
-    justify-content: space-between;
+
+  .mobile-cam-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(229, 152, 56, 0.16);
+    border-color: rgba(229, 152, 56, 0.48);
+    color: var(--wood-light);
+    font-weight: 700;
+    padding: 7px 11px;
+    border-radius: 10px;
   }
-  .orbit-360-panel {
+
+  .mobile-cam-btn .cam-caret {
+    font-size: 10px;
+    opacity: 0.85;
+    transition: transform 0.18s ease;
+  }
+
+  .hud-bottom.mobile-cam-open .mobile-cam-btn {
+    background: var(--wood-accent);
+    color: #191006;
+    border-color: var(--wood-light);
+  }
+
+  .hud-bottom.mobile-cam-open .mobile-cam-btn .cam-caret {
+    transform: rotate(180deg);
+  }
+
+  /* Convert long .view-angle-dock bar into a compact popover menu on mobile */
+  .view-angle-dock {
+    display: none;
+    width: min(350px, calc(100vw - 20px));
+    background: rgba(22, 17, 13, 0.96);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(235, 195, 140, 0.38);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+    animation: toastIn 0.18s ease;
+  }
+
+  .hud-bottom.mobile-cam-open .view-angle-dock {
+    display: grid;
+  }
+
+  .view-angle-dock .mobile-popover-header {
+    display: flex;
+    grid-column: 1 / -1;
+  }
+
+  .view-dock-label {
+    display: none;
+  }
+
+  .view-style-btn,
+  .view-auto-pill {
+    font-size: 12px;
+    padding: 9px 10px;
+    border-radius: 9px;
+    text-align: center;
     justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    margin-left: 0;
+  }
+
+  /* 7. Bottom Controls Bar & Contextual Step 2 Slot Picker */
+  .bottom-row-main {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Hide verbose step 1 coach box on mobile (shown in top banner); pop up for Step 2 Stacking! */
+  .action-coach {
+    display: none;
+    width: min(420px, 100%);
+    max-width: 100%;
+    padding: 9px 12px;
+    border-radius: 14px;
+    justify-content: space-between;
     flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .action-coach.stacking-active {
+    display: flex;
+  }
+
+  .action-coach.stacking-active .coach-text {
+    display: none;
+  }
+
+  .action-coach.stacking-active .slot-picker {
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .orbit-360-panel {
+    width: auto;
+    max-width: 100%;
+    justify-content: center;
+    flex-wrap: nowrap;
+    padding: 6px 8px;
+    border-radius: 14px;
+    gap: 6px;
   }
 }
 
 @media (max-width: 640px) {
   .hud-top {
-    top: 6px;
-    left: 8px;
-    right: 8px;
-    gap: 6px;
-    flex-wrap: wrap;
+    left: 6px;
+    right: 6px;
+    gap: 5px;
   }
+
+  /* Compact gold 'J' emblem on narrow phones to maximize Turn Banner room */
   .brand-card {
-    padding: 6px 10px;
+    padding: 5px;
   }
-  .brand-title p {
+
+  .brand-title {
     display: none;
   }
-  .brand-title h1 {
-    font-size: 13px;
-  }
+
   .turn-banner {
-    order: 3;
+    padding: 5px 9px;
+    gap: 6px;
+  }
+
+  .turn-player-name {
+    font-size: 12px;
+  }
+
+  .turn-phase-text {
+    font-size: 10px;
+  }
+
+  .tower-stats {
+    gap: 7px;
+    padding-left: 7px;
+  }
+
+  .stat-value {
+    font-size: 12.5px;
+  }
+
+  .stat-label {
+    font-size: 8px;
+  }
+
+  .mobile-trigger-btn {
+    padding: 7px 9px;
+    font-size: 11.5px;
+    gap: 4px;
+  }
+
+  .mobile-trigger-label {
+    display: none;
+  }
+
+  /* Keep bottom bar on 1 sleek row on phones; show 360° slider when Camera Menu is open */
+  .hud-bottom {
+    left: 6px;
+    right: 6px;
+    bottom: env(safe-area-inset-bottom, 6px);
+    gap: 6px;
+  }
+
+  .orbit-360-panel {
     width: 100%;
     justify-content: space-between;
-    padding: 7px 12px;
-  }
-  .hud-actions {
-    gap: 4px;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    padding: 5px 7px;
+    gap: 5px;
   }
-  .hud-actions .btn span.btn-label {
-    font-size: 10.5px;
+
+  .orbit-slider-wrap {
+    display: none;
+    width: 100%;
+    order: -1;
+    justify-content: space-between;
+    padding: 4px 6px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
-  .hud-actions .btn {
-    padding: 6px 8px;
-    font-size: 11px;
-    gap: 4px;
+
+  .hud-bottom.mobile-cam-open .orbit-slider-wrap {
+    display: flex;
   }
-  .mobile-block-pill {
-    top: 108px;
-  }
-  .toast-container {
-    top: 112px;
-  }
-  .hud-bottom {
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    gap: 6px;
-  }
-  .action-coach {
-    padding: 8px 12px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .coach-text {
-    font-size: 11.5px;
-  }
+
   .orbit-slider {
-    width: 85px;
+    flex: 1;
+    width: auto;
   }
-  .view-angle-dock {
-    padding: 4px 6px;
-    gap: 4px;
-    border-radius: 16px;
-  }
-  .view-dock-label {
+
+  .rot-deg-label {
     display: none;
   }
-  .view-style-btn,
-  .view-auto-pill {
-    font-size: 10.5px;
-    padding: 4px 8px;
+
+  .mobile-cam-btn {
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+
+  #cam-rot-left,
+  #cam-rot-right {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .touch-mode-toggle {
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .touch-mode-btn {
+    font-size: 11px;
+    padding: 5px 9px;
+  }
+
+  .slot-picker .btn {
+    padding: 6px 10px;
+    font-size: 11.5px;
+    flex: 1;
+  }
+
+  .modal-card {
+    padding: 16px;
+    border-radius: 16px;
   }
 }
+
 
