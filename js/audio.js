@@ -1,7 +1,9 @@
 /**
- * Procedural Web Audio synthesizer for realistic wooden Jenga blocks,
- * plus expressive vocal "Oh!" (on tower collapse) and "Yey!" celebration cheers (on win).
- * Requires zero external MP3/WAV assets and works offline or via file://.
+ * Dual-Engine Mobile & Desktop Sound Synthesizer (Web Audio API + HTML5 WAV/MP3 Audio Pool)
+ * for Jenga 360°.
+ * - Works on iOS Safari/Chrome (even with hardware Silent switch via Playback session + WAV Audio)
+ * - Works on Android Chrome, Samsung Internet, and Desktop browsers
+ * - Includes YouTube Short laughing sound (pez2Wcfm--g) on mid-air tower collapse
  */
 class SoundEngine {
   constructor() {
@@ -13,12 +15,170 @@ class SoundEngine {
     this.laughBuffer = null;
     this.laughSource = null;
     this.laughAudio = null;
+    this.laughBlobUrl = null;
     this.isDecodingLaugh = false;
     this.pendingLaughPlay = false;
+    this.pendingSoundFn = null;
     this.mobileUnlocked = false;
-    this.laughElementUnlocked = false;
+    this.wavUrls = {};
+    this.wavPools = {};
+    this.unlockAudio = null;
+
+    this.buildProceduralWavBank();
     this.preloadLaughElement();
     this.bindMobileAudioUnlock();
+  }
+
+  /**
+   * Encodes a mono Float32Array [-1..1] at sampleRate into a 16-bit PCM WAV Blob URL.
+   */
+  encodeWavUrl(samples, sampleRate = 22050) {
+    const numSamples = samples.length;
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    const writeStr = (offset, str) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true);  // PCM format
+    view.setUint16(22, 1, true);  // Mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      offset += 2;
+    }
+
+    const blob = new Blob([buffer], { type: 'audio/wav' });
+    return URL.createObjectURL(blob);
+  }
+
+  /**
+   * Pre-synthesizes crisp PCM WAV clips for HTML5 <audio> fallback on mobile devices
+   * where Web Audio API may still be resuming or muted by the iOS silent switch.
+   */
+  buildProceduralWavBank() {
+    try {
+      const sr = 22050;
+
+      // 1. Silent looping WAV (keeps iOS AVAudioSession in Playback mode even when Silent switch is on)
+      const silentSamples = new Float32Array(Math.floor(sr * 0.25));
+      this.wavUrls.silent = this.encodeWavUrl(silentSamples, sr);
+      this.unlockAudio = new Audio(this.wavUrls.silent);
+      this.unlockAudio.preload = 'auto';
+      this.unlockAudio.loop = true;
+      this.unlockAudio.playsInline = true;
+      this.unlockAudio.setAttribute('playsinline', '');
+      this.unlockAudio.setAttribute('webkit-playsinline', '');
+
+      // Helper to add a decaying sine/triangle wood tone into a sample buffer
+      const addTone = (buf, startSec, durSec, freqStart, freqEnd, amp, isTriangle = false) => {
+        const i0 = Math.floor(startSec * sr);
+        const len = Math.floor(durSec * sr);
+        let phase = 0;
+        for (let i = 0; i < len && i0 + i < buf.length; i++) {
+          const t = i / len;
+          const freq = freqStart * Math.pow(freqEnd / freqStart, t);
+          phase += (2 * Math.PI * freq) / sr;
+          const env = Math.min(1, i / (sr * 0.004)) * Math.exp(-t * 5.2);
+          const raw = isTriangle
+            ? (2 / Math.PI) * Math.asin(Math.sin(phase))
+            : Math.sin(phase);
+          buf[i0 + i] += raw * amp * env;
+        }
+      };
+
+      // 2. Wood Tap WAV
+      const tapBuf = new Float32Array(Math.floor(sr * 0.09));
+      addTone(tapBuf, 0, 0.08, 320, 95, 0.55, true);
+      addTone(tapBuf, 0, 0.04, 680, 420, 0.3, false);
+      this.wavUrls.tap = this.encodeWavUrl(tapBuf, sr);
+
+      // 3. Block Select (Allowed) — Crisp wood knock + warm G4 -> C5 marimba interval
+      const selOkBuf = new Float32Array(Math.floor(sr * 0.22));
+      addTone(selOkBuf, 0, 0.07, 350, 110, 0.45, true);
+      addTone(selOkBuf, 0, 0.14, 392.0, 392.0, 0.35, false);
+      addTone(selOkBuf, 0.045, 0.15, 523.25, 523.25, 0.38, false);
+      this.wavUrls.selectAllowed = this.encodeWavUrl(selOkBuf, sr);
+
+      // 4. Block Select (Locked) — Low muted hollow knock
+      const selLockBuf = new Float32Array(Math.floor(sr * 0.12));
+      addTone(selLockBuf, 0, 0.09, 175, 70, 0.45, true);
+      this.wavUrls.selectLocked = this.encodeWavUrl(selLockBuf, sr);
+
+      // 5. Wood Slide — Filtered friction grain burst
+      const slideBuf = new Float32Array(Math.floor(sr * 0.055));
+      for (let i = 0; i < slideBuf.length; i++) {
+        const env = Math.exp(-i / (slideBuf.length * 0.55));
+        const mod = Math.sin((2 * Math.PI * 980 * i) / sr);
+        slideBuf[i] = (Math.random() * 2 - 1) * mod * env * 0.28;
+      }
+      this.wavUrls.slide = this.encodeWavUrl(slideBuf, sr);
+
+      // 6. Block Extract — Upward wooden pop + A4 -> E5 lift
+      const extBuf = new Float32Array(Math.floor(sr * 0.26));
+      addTone(extBuf, 0, 0.075, 360, 130, 0.48, true);
+      addTone(extBuf, 0, 0.16, 440.0, 440.0, 0.38, true);
+      addTone(extBuf, 0.055, 0.19, 659.25, 659.25, 0.42, true);
+      this.wavUrls.extract = this.encodeWavUrl(extBuf, sr);
+
+      // 7. Block Place — Solid 3-tap hardwood set-down thud
+      const placeBuf = new Float32Array(Math.floor(sr * 0.22));
+      addTone(placeBuf, 0, 0.08, 220, 75, 0.65, true);
+      addTone(placeBuf, 0.048, 0.075, 310, 95, 0.42, true);
+      addTone(placeBuf, 0.095, 0.07, 260, 85, 0.25, true);
+      this.wavUrls.place = this.encodeWavUrl(placeBuf, sr);
+
+      // 8. Win Fanfare WAV
+      const winBuf = new Float32Array(Math.floor(sr * 0.9));
+      const fanfare = [523.25, 659.25, 783.99, 1046.5];
+      fanfare.forEach((f, idx) => {
+        addTone(winBuf, idx * 0.09, idx === 3 ? 0.55 : 0.22, f, f, 0.42, true);
+      });
+      this.wavUrls.win = this.encodeWavUrl(winBuf, sr);
+
+      // Pre-allocate small HTML5 Audio pools per sound key
+      Object.keys(this.wavUrls).forEach((key) => {
+        if (key === 'silent') return;
+        this.wavPools[key] = [new Audio(this.wavUrls[key]), new Audio(this.wavUrls[key])];
+        this.wavPools[key].forEach((a) => {
+          a.preload = 'auto';
+          a.playsInline = true;
+          a.setAttribute('playsinline', '');
+          a.setAttribute('webkit-playsinline', '');
+        });
+      });
+    } catch (_) {}
+  }
+
+  playWavFallback(key, volume = 0.85) {
+    if (!this.enabled) return;
+    const pool = this.wavPools[key];
+    if (!pool || !pool.length) return;
+    try {
+      const audio = pool.find((a) => a.paused || a.ended) || pool[0];
+      audio.volume = Math.max(0.05, Math.min(1.0, volume));
+      audio.currentTime = 0;
+      const p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {});
+      }
+    } catch (_) {}
   }
 
   preloadLaughElement() {
@@ -28,99 +188,131 @@ class SoundEngine {
       audio.playsInline = true;
       audio.setAttribute('playsinline', '');
       audio.setAttribute('webkit-playsinline', '');
-      audio.src = window.JENGA_LAUGH_MP3 || 'assets/laugh.mp3';
+
+      // Convert base64 MP3 to a Blob URL (much more reliable on iOS Safari & mobile Chrome than a long data: URI)
+      if (window.JENGA_LAUGH_MP3) {
+        const commaIdx = window.JENGA_LAUGH_MP3.indexOf(',');
+        if (commaIdx !== -1) {
+          const b64 = window.JENGA_LAUGH_MP3.slice(commaIdx + 1);
+          const binary = atob(b64);
+          const len = binary.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          this.laughRawBytes = bytes;
+          const blob = new Blob([bytes], { type: 'audio/mpeg' });
+          this.laughBlobUrl = URL.createObjectURL(blob);
+          audio.src = this.laughBlobUrl;
+        }
+      }
+
+      if (!audio.src) {
+        audio.src = 'assets/laugh.mp3';
+      }
       audio.load();
       this.laughAudio = audio;
     } catch (_) {}
   }
 
   /**
-   * Mobile browsers (iOS Safari, Android Chrome) ignore Web Audio / HTML5 Audio
-   * when OrbitControls calls preventDefault() on pointerdown.
-   * Listening to touchstart, touchend, pointerup, and click at the document level
-   * unlocks AudioContext with a 1-sample silent buffer and primes the HTML5 Audio element.
+   * Synchronously unlocks Web Audio API + HTML5 Audio inside any direct user gesture
+   * (pointerdown, pointerup, touchend, click) before any library calls preventDefault().
+   */
+  unlockFromGesture() {
+    if (!this.enabled) return;
+
+    if (typeof navigator !== 'undefined' && navigator.audioSession) {
+      try {
+        navigator.audioSession.type = 'playback';
+      } catch (_) {}
+    }
+
+    this.init();
+
+    if (this.unlockAudio && this.unlockAudio.paused) {
+      try {
+        this.unlockAudio.volume = 0.01;
+        const p = this.unlockAudio.play();
+        if (p && typeof p.then === 'function') {
+          p.then(() => {
+            this.mobileUnlocked = true;
+            this.flushPendingSound();
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+
+    if (this.ctx) {
+      if (this.ctx.state !== 'running') {
+        try {
+          const rp = this.ctx.resume();
+          if (rp && typeof rp.then === 'function') {
+            rp.then(() => {
+              this.mobileUnlocked = true;
+              this.flushPendingSound();
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      } else {
+        this.mobileUnlocked = true;
+        this.flushPendingSound();
+      }
+
+      try {
+        const silentBuf = this.ctx.createBuffer(1, 1, 22050);
+        const src = this.ctx.createBufferSource();
+        src.buffer = silentBuf;
+        src.connect(this.ctx.destination);
+        src.start(0);
+      } catch (_) {}
+    }
+  }
+
+  flushPendingSound() {
+    if (!this.pendingSoundFn || !this.enabled) return;
+    const fn = this.pendingSoundFn;
+    this.pendingSoundFn = null;
+    try {
+      fn();
+    } catch (_) {}
+  }
+
+  /**
+   * Unlocks Web Audio API and HTML5 Audio on mobile browsers (iOS Safari, Android Chrome).
    */
   bindMobileAudioUnlock() {
     const unlockHandler = () => {
-      if (!this.enabled) return;
-
-      // Enable playback audio session on iOS 17+ so audio works even if mute switch is on
-      if (typeof navigator !== 'undefined' && navigator.audioSession) {
-        try {
-          navigator.audioSession.type = 'playback';
-        } catch (_) {}
-      }
-
-      this.init();
-
-      if (this.ctx) {
-        if (this.ctx.state !== 'running') {
-          try {
-            this.ctx.resume();
-          } catch (_) {}
-        }
-
-        if (!this.mobileUnlocked) {
-          try {
-            const silentBuf = this.ctx.createBuffer(1, 1, 22050);
-            const src = this.ctx.createBufferSource();
-            src.buffer = silentBuf;
-            src.connect(this.ctx.destination);
-            src.start(0);
-            if (this.ctx.state === 'running') {
-              this.mobileUnlocked = true;
-            }
-          } catch (_) {}
-        }
-      }
-
-      // Prime HTML5 Audio element once on first user gesture so it can play later in requestAnimationFrame
-      if (this.laughAudio && !this.laughElementUnlocked) {
-        this.laughElementUnlocked = true;
-        try {
-          this.laughAudio.muted = true;
-          const p = this.laughAudio.play();
-          if (p && typeof p.then === 'function') {
-            p.then(() => {
-              if (!this.lastOhTime || performance.now() - this.lastOhTime > 2500) {
-                this.laughAudio.pause();
-                this.laughAudio.currentTime = 0;
-              }
-              this.laughAudio.muted = false;
-            }).catch(() => {
-              this.laughAudio.muted = false;
-              this.laughElementUnlocked = false;
-            });
-          } else {
-            this.laughAudio.pause();
-            this.laughAudio.currentTime = 0;
-            this.laughAudio.muted = false;
-          }
-        } catch (_) {
-          if (this.laughAudio) this.laughAudio.muted = false;
-        }
-      }
+      this.unlockFromGesture();
     };
 
-    ['touchstart', 'touchend', 'pointerup', 'click', 'keydown'].forEach((evt) => {
+    ['touchstart', 'touchend', 'pointerdown', 'pointerup', 'mousedown', 'click', 'keydown'].forEach((evt) => {
       window.addEventListener(evt, unlockHandler, { capture: true, passive: true });
     });
   }
 
-  decodeDataUriToBuffer(dataUri) {
-    if (!this.ctx || !dataUri || this.laughBuffer || this.isDecodingLaugh) return;
+  decodeLaughBuffer() {
+    if (!this.ctx || this.laughBuffer || this.isDecodingLaugh) return;
+    if (!this.laughRawBytes && !window.JENGA_LAUGH_MP3) return;
     try {
-      const commaIdx = dataUri.indexOf(',');
-      if (commaIdx === -1) return;
       this.isDecodingLaugh = true;
-      const b64 = dataUri.slice(commaIdx + 1);
-      const binary = atob(b64);
-      const len = binary.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binary.charCodeAt(i);
+      let bytes = this.laughRawBytes;
+      if (!bytes && window.JENGA_LAUGH_MP3) {
+        const commaIdx = window.JENGA_LAUGH_MP3.indexOf(',');
+        if (commaIdx === -1) {
+          this.isDecodingLaugh = false;
+          return;
+        }
+        const b64 = window.JENGA_LAUGH_MP3.slice(commaIdx + 1);
+        const binary = atob(b64);
+        bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        this.laughRawBytes = bytes;
       }
-      const arrayBuf = bytes.buffer.slice(0);
+
+      const arrayBuf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
       this.ctx.decodeAudioData(
         arrayBuf,
         (decoded) => {
@@ -166,6 +358,11 @@ class SoundEngine {
   }
 
   init() {
+    if (typeof navigator !== 'undefined' && navigator.audioSession) {
+      try {
+        navigator.audioSession.type = 'playback';
+      } catch (_) {}
+    }
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
@@ -178,7 +375,7 @@ class SoundEngine {
       } catch (_) {}
     }
     if (this.ctx && !this.laughBuffer && !this.isDecodingLaugh) {
-      this.decodeDataUriToBuffer(window.JENGA_LAUGH_MP3);
+      this.decodeLaughBuffer();
     }
   }
 
@@ -220,6 +417,8 @@ class SoundEngine {
     this.enabled = !this.enabled;
     if (!this.enabled) {
       this.stopAll();
+    } else {
+      this.init();
     }
     return this.enabled;
   }
@@ -230,7 +429,11 @@ class SoundEngine {
   playWoodTap(pitchFactor = 1.0, volume = 0.25) {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
+
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.playWavFallback('tap', Math.min(1.0, volume * 2.5));
+      return;
+    }
 
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
@@ -268,7 +471,10 @@ class SoundEngine {
     this.lastSlideTime = nowMs;
 
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.playWavFallback('slide', Math.min(0.9, 0.35 + intensity * 0.45));
+      return;
+    }
 
     const now = this.ctx.currentTime;
     const bufferSize = this.ctx.sampleRate * 0.045;
@@ -300,23 +506,41 @@ class SoundEngine {
 
   /**
    * Warm, tactile wooden marimba-like click/knock when a block is touched or selected.
-   * Plays a pleasant two-tone wooden pick sound if allowed, or a low muted knock if locked.
    */
   playBlockSelect(allowed = true) {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
 
-    if (!allowed) {
-      this.playWoodTap(0.55, 0.18);
+    const wavKey = allowed ? 'selectAllowed' : 'selectLocked';
+
+    // Always play HTML5 WAV fallback when Web Audio is still unlocking or on touch devices
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.playWavFallback(wavKey, 0.9);
+      this.pendingSoundFn = () => {
+        this.playBlockSelect(allowed);
+      };
+      if (this.ctx) {
+        try {
+          const rp = this.ctx.resume();
+          if (rp && typeof rp.then === 'function') {
+            rp.then(() => {
+              this.mobileUnlocked = true;
+              this.flushPendingSound();
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      }
       return;
     }
 
-    // Crisp initial wood touch
-    this.playWoodTap(1.15, 0.22);
+    if (!allowed) {
+      this.playWoodTap(0.55, 0.24);
+      return;
+    }
 
-    // Warm rosewood/marimba harmonic overtone to confirm selection
-    const notes = [392.0, 523.25]; // G4 -> C5 warm fifth/fourth interval
+    this.playWoodTap(1.15, 0.28);
+
+    const notes = [392.0, 523.25];
     notes.forEach((freq, idx) => {
       const start = this.ctx.currentTime + idx * 0.045;
       const osc = this.ctx.createOscillator();
@@ -324,7 +548,7 @@ class SoundEngine {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, start);
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.11, start + 0.006);
+      gain.gain.linearRampToValueAtTime(0.14, start + 0.006);
       gain.gain.exponentialRampToValueAtTime(0.0008, start + 0.14);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
@@ -339,10 +563,15 @@ class SoundEngine {
   playBlockExtract() {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
 
-    this.playWoodTap(1.28, 0.26);
-    const notes = [440.0, 659.25]; // A4 -> E5 lift interval
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.playWavFallback('extract', 0.95);
+      this.pendingSoundFn = () => this.playBlockExtract();
+      return;
+    }
+
+    this.playWoodTap(1.28, 0.3);
+    const notes = [440.0, 659.25];
     notes.forEach((freq, idx) => {
       const start = this.ctx.currentTime + idx * 0.055;
       const osc = this.ctx.createOscillator();
@@ -350,7 +579,7 @@ class SoundEngine {
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, start);
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.12, start + 0.008);
+      gain.gain.linearRampToValueAtTime(0.15, start + 0.008);
       gain.gain.exponentialRampToValueAtTime(0.0008, start + 0.18);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
@@ -365,11 +594,16 @@ class SoundEngine {
   playBlockPlace() {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
 
-    this.playWoodTap(0.78, 0.42);
-    this.scheduleTimer(() => this.playWoodTap(1.12, 0.24), 48);
-    this.scheduleTimer(() => this.playWoodTap(0.95, 0.12), 95);
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.playWavFallback('place', 0.95);
+      this.pendingSoundFn = () => this.playBlockPlace();
+      return;
+    }
+
+    this.playWoodTap(0.78, 0.45);
+    this.scheduleTimer(() => this.playWoodTap(1.12, 0.26), 48);
+    this.scheduleTimer(() => this.playWoodTap(0.95, 0.14), 95);
   }
 
   /**
@@ -378,7 +612,7 @@ class SoundEngine {
   playTurnSuccess() {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
+    if (!this.ctx || this.ctx.state !== 'running') return;
 
     const notes = [523.25, 659.25, 783.99];
     notes.forEach((freq, idx) => {
@@ -388,7 +622,7 @@ class SoundEngine {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now);
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.12, now + 0.01);
+      gain.gain.linearRampToValueAtTime(0.14, now + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.28);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
@@ -425,26 +659,29 @@ class SoundEngine {
       } catch (_) {}
     }
 
-    // Prefer decoded Web Audio buffer for instant zero-latency playback
-    if (this.startBufferLaugh()) {
-      return;
-    }
-
-    // If Web Audio buffer is currently decoding, queue it to play immediately upon decode completion
-    if (this.isDecodingLaugh) {
+    // 1. Play via unlocked Web Audio API buffer (works inside requestAnimationFrame on iOS & Android)
+    let playedWebAudio = false;
+    if (this.ctx && this.laughBuffer) {
+      playedWebAudio = this.startBufferLaugh();
+    } else if (this.isDecodingLaugh) {
       this.pendingLaughPlay = true;
-      return;
     }
 
-    // HTML5 Audio fallback
-    if (this.laughAudio) {
+    // 2. If Web Audio didn't play, fall back to HTML5 Audio element
+    if (!playedWebAudio && this.laughAudio) {
       try {
         this.laughAudio.muted = false;
         this.laughAudio.volume = 1.0;
         this.laughAudio.currentTime = 0;
         const p = this.laughAudio.play();
         if (p && typeof p.catch === 'function') {
-          p.catch(() => {});
+          p.catch(() => {
+            if (this.isDecodingLaugh) {
+              this.pendingLaughPlay = true;
+            } else {
+              this.startBufferLaugh();
+            }
+          });
         }
       } catch (_) {}
     }
@@ -456,9 +693,12 @@ class SoundEngine {
   playWinYey() {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
 
-    // 1. Multi-voice formant "Yey!" cheer (vowel glide 'Y-e-y' with rising pitch)
+    if (!this.ctx || this.ctx.state !== 'running') {
+      this.playWavFallback('win', 0.95);
+      return;
+    }
+
     const voices = [275, 340, 410, 225];
     voices.forEach((basePitch, idx) => {
       const now = this.ctx.currentTime + idx * 0.04;
@@ -470,7 +710,6 @@ class SoundEngine {
       osc.frequency.exponentialRampToValueAtTime(basePitch * 1.48, now + 0.28);
       osc.frequency.exponentialRampToValueAtTime(basePitch * 1.32, now + dur);
 
-      // Formant 1 (glides 380 -> 580 -> 420 Hz for "Ye-a-y")
       const f1 = this.ctx.createBiquadFilter();
       f1.type = 'bandpass';
       f1.frequency.setValueAtTime(380, now);
@@ -478,7 +717,6 @@ class SoundEngine {
       f1.frequency.linearRampToValueAtTime(440, now + dur);
       f1.Q.setValueAtTime(5.0, now);
 
-      // Formant 2 (glides 2150 -> 1750 -> 2100 Hz for bright "Yey!")
       const f2 = this.ctx.createBiquadFilter();
       f2.type = 'bandpass';
       f2.frequency.setValueAtTime(2150, now);
@@ -502,7 +740,6 @@ class SoundEngine {
       osc.stop(now + dur + 0.02);
     });
 
-    // 2. Celebratory Victory Fanfare Arpeggio
     const fanfareNotes = [523.25, 659.25, 783.99, 1046.5];
     fanfareNotes.forEach((freq, i) => {
       const start = this.ctx.currentTime + i * 0.09;
@@ -520,7 +757,6 @@ class SoundEngine {
       osc.stop(start + dur + 0.02);
     });
 
-    // 3. Rhythmic Party Claps
     for (let c = 0; c < 10; c++) {
       this.scheduleTimer(() => {
         if (!this.ctx || !this.enabled) return;
@@ -547,7 +783,6 @@ class SoundEngine {
       }, c * 65 + Math.random() * 25);
     }
 
-    // 4. Spoken "Yey!" celebration via SpeechSynthesis if supported
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -566,10 +801,9 @@ class SoundEngine {
   playTowerCollapse() {
     if (!this.enabled) return;
     this.init();
-    if (!this.ctx) return;
 
     // Contagious laughter reaction spanning the fall and collapse
-    this.playBreakOh(2.35);
+    this.playBreakOh();
 
     // 28 staggered hardwood block impacts spanning ~2.1 seconds as the tower topples and settles
     for (let i = 0; i < 28; i++) {

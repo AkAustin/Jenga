@@ -1352,6 +1352,9 @@ window.initJengaGame = function () {
   }
 
   function onPointerDown(e) {
+    if (window.JengaAudio && typeof window.JengaAudio.unlockFromGesture === 'function') {
+      window.JengaAudio.unlockFromGesture();
+    }
     if (e.pointerId !== undefined) {
       activePointers.add(e.pointerId);
     }
@@ -1540,6 +1543,9 @@ window.initJengaGame = function () {
   }
 
   function onPointerUp(e) {
+    if (window.JengaAudio && typeof window.JengaAudio.unlockFromGesture === 'function') {
+      window.JengaAudio.unlockFromGesture();
+    }
     if (e && e.pointerId !== undefined) {
       activePointers.delete(e.pointerId);
     }
@@ -2680,12 +2686,16 @@ window.initJengaGame = function () {
     setupRoomChannel(code, nickname, false);
   });
 
-  // Pointer & Resize Event Listeners
-  renderer.domElement.addEventListener('pointerdown', (e) => {
-    closeAllMobileMenus();
-    camAnimToken++;
-    onPointerDown(e);
-  });
+  // Pointer & Resize Event Listeners (capture: true ensures block selection runs before OrbitControls.preventDefault)
+  renderer.domElement.addEventListener(
+    'pointerdown',
+    (e) => {
+      closeAllMobileMenus();
+      camAnimToken++;
+      onPointerDown(e);
+    },
+    { capture: true }
+  );
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('pointercancel', onPointerUp);
