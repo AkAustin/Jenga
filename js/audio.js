@@ -10,6 +10,76 @@ class SoundEngine {
     this.lastSlideTime = 0;
     this.lastOhTime = 0;
     this.activeTimers = [];
+    this.laughBuffer = null;
+    this.laughSource = null;
+    this.laughAudio = null;
+    this.isDecodingLaugh = false;
+    this.pendingLaughPlay = false;
+    this.preloadLaughElement();
+  }
+
+  preloadLaughElement() {
+    try {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      audio.src = window.JENGA_LAUGH_MP3 || 'assets/laugh.mp3';
+      audio.load();
+      this.laughAudio = audio;
+    } catch (_) {}
+  }
+
+  decodeDataUriToBuffer(dataUri) {
+    if (!this.ctx || !dataUri || this.laughBuffer || this.isDecodingLaugh) return;
+    try {
+      const commaIdx = dataUri.indexOf(',');
+      if (commaIdx === -1) return;
+      this.isDecodingLaugh = true;
+      const b64 = dataUri.slice(commaIdx + 1);
+      const binary = atob(b64);
+      const len = binary.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      this.ctx.decodeAudioData(
+        bytes.buffer,
+        (decoded) => {
+          this.laughBuffer = decoded;
+          this.isDecodingLaugh = false;
+          if (this.pendingLaughPlay && this.enabled) {
+            this.pendingLaughPlay = false;
+            this.startBufferLaugh();
+          }
+        },
+        () => {
+          this.isDecodingLaugh = false;
+        }
+      );
+    } catch (_) {
+      this.isDecodingLaugh = false;
+    }
+  }
+
+  startBufferLaugh() {
+    if (!this.ctx || !this.laughBuffer || !this.enabled) return false;
+    try {
+      if (this.laughSource) {
+        try {
+          this.laughSource.stop();
+        } catch (_) {}
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.laughBuffer;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+      src.connect(gain);
+      gain.connect(this.ctx.destination);
+      src.start(0);
+      this.laughSource = src;
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   init() {
@@ -21,6 +91,9 @@ class SoundEngine {
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
+    }
+    if (this.ctx && !this.laughBuffer && !this.isDecodingLaugh) {
+      this.decodeDataUriToBuffer(window.JENGA_LAUGH_MP3);
     }
   }
 
@@ -38,6 +111,19 @@ class SoundEngine {
       clearTimeout(this.activeTimers.pop());
     }
     this.lastOhTime = 0;
+    this.pendingLaughPlay = false;
+    if (this.laughSource) {
+      try {
+        this.laughSource.stop();
+      } catch (_) {}
+      this.laughSource = null;
+    }
+    if (this.laughAudio) {
+      try {
+        this.laughAudio.pause();
+        this.laughAudio.currentTime = 0;
+      } catch (_) {}
+    }
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -128,7 +214,68 @@ class SoundEngine {
   }
 
   /**
-   * Solid wooden thud.
+   * Warm, tactile wooden marimba-like click/knock when a block is touched or selected.
+   * Plays a pleasant two-tone wooden pick sound if allowed, or a low muted knock if locked.
+   */
+  playBlockSelect(allowed = true) {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    if (!allowed) {
+      this.playWoodTap(0.55, 0.18);
+      return;
+    }
+
+    // Crisp initial wood touch
+    this.playWoodTap(1.15, 0.22);
+
+    // Warm rosewood/marimba harmonic overtone to confirm selection
+    const notes = [392.0, 523.25]; // G4 -> C5 warm fifth/fourth interval
+    notes.forEach((freq, idx) => {
+      const start = this.ctx.currentTime + idx * 0.045;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.11, start + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0008, start + 0.14);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.15);
+    });
+  }
+
+  /**
+   * Satisfying upward wooden pop & release tone when a block is pulled free from the tower.
+   */
+  playBlockExtract() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+
+    this.playWoodTap(1.28, 0.26);
+    const notes = [440.0, 659.25]; // A4 -> E5 lift interval
+    notes.forEach((freq, idx) => {
+      const start = this.ctx.currentTime + idx * 0.055;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.12, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0008, start + 0.18);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.19);
+    });
+  }
+
+  /**
+   * Solid wooden thud when a block is placed down on top of the tower.
    */
   playBlockPlace() {
     if (!this.enabled) return;
@@ -136,7 +283,8 @@ class SoundEngine {
     if (!this.ctx) return;
 
     this.playWoodTap(0.78, 0.42);
-    this.scheduleTimer(() => this.playWoodTap(1.12, 0.22), 45);
+    this.scheduleTimer(() => this.playWoodTap(1.12, 0.24), 48);
+    this.scheduleTimer(() => this.playWoodTap(0.95, 0.12), 95);
   }
 
   /**
@@ -165,12 +313,10 @@ class SoundEngine {
   }
 
   /**
-   * Contagious multi-voice parlor laughter ("Hahaha! Ahahahaha!") that stretches
-   * across the tower's fall and collapse (~2.4 seconds).
-   * Synthesizes rhythmic "Ha-ha-ha-ha!" vocal bursts with breath aspiration + vowel formants
-   * layered with Web Speech laughter.
+   * Plays the YouTube Short laughing sound (https://www.youtube.com/shorts/pez2Wcfm--g)
+   * as the tower starts falling through the air.
    */
-  playBreakOh(duration = 2.4) {
+  playBreakOh() {
     if (!this.enabled) return;
     const nowMs = performance.now();
     if (this.lastOhTime && nowMs - this.lastOhTime < 2200) {
@@ -179,94 +325,41 @@ class SoundEngine {
     this.lastOhTime = nowMs;
 
     this.init();
-    if (!this.ctx) return;
 
-    // 1. Multi-voice rhythmic "Ha-ha-ha-ha-ha!" laughter bursts across ~2.4 seconds
-    const laughVoices = [
-      { basePitch: 240, stepMs: 175, syllables: 12, delayMs: 0 },
-      { basePitch: 315, stepMs: 160, syllables: 13, delayMs: 55 },
-      { basePitch: 185, stepMs: 190, syllables: 11, delayMs: 95 },
-      { basePitch: 370, stepMs: 155, syllables: 13, delayMs: 130 }
-    ];
-
-    laughVoices.forEach((v) => {
-      for (let s = 0; s < v.syllables; s++) {
-        const burstDelay = v.delayMs + s * v.stepMs + Math.random() * 18;
-        this.scheduleTimer(() => {
-          if (!this.ctx || !this.enabled) return;
-          const now = this.ctx.currentTime;
-          const sylDur = 0.125;
-
-          // Descending laugh phrase contour with playful bounce per "Ha!" syllable
-          const phraseDecay = Math.max(0.72, 1.0 - (s % 6) * 0.045);
-          const pitch = v.basePitch * phraseDecay * (0.97 + Math.random() * 0.06);
-
-          // Vocal cord sawtooth source for the "a" in "Ha!"
-          const osc = this.ctx.createOscillator();
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(pitch * 1.18, now);
-          osc.frequency.exponentialRampToValueAtTime(pitch * 0.84, now + sylDur);
-
-          // Vowel "Ah" Formants (F1 ~ 760 Hz, F2 ~ 1320 Hz)
-          const f1 = this.ctx.createBiquadFilter();
-          f1.type = 'bandpass';
-          f1.frequency.setValueAtTime(760, now);
-          f1.Q.setValueAtTime(4.8, now);
-
-          const f2 = this.ctx.createBiquadFilter();
-          f2.type = 'bandpass';
-          f2.frequency.setValueAtTime(1320, now);
-          f2.Q.setValueAtTime(5.5, now);
-
-          const vGain = this.ctx.createGain();
-          const envelopeScale = Math.sin((Math.PI * (s + 1)) / (v.syllables + 1));
-          const peakVol = 0.035 + 0.045 * envelopeScale;
-          vGain.gain.setValueAtTime(0.001, now);
-          vGain.gain.linearRampToValueAtTime(peakVol, now + 0.018);
-          vGain.gain.exponentialRampToValueAtTime(0.0008, now + sylDur);
-
-          osc.connect(f1);
-          osc.connect(f2);
-          f1.connect(vGain);
-          f2.connect(vGain);
-          vGain.connect(this.ctx.destination);
-
-          osc.start(now);
-          osc.stop(now + sylDur + 0.01);
-
-          // Short breathy "H-" aspiration burst at the start of each "Ha!"
-          const bufLen = Math.floor(this.ctx.sampleRate * 0.028);
-          const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
-          const data = buf.getChannelData(0);
-          for (let j = 0; j < bufLen; j++) {
-            data[j] = (Math.random() * 2 - 1) * Math.exp(-j / (bufLen * 0.45));
-          }
-          const hNoise = this.ctx.createBufferSource();
-          hNoise.buffer = buf;
-          const hFilter = this.ctx.createBiquadFilter();
-          hFilter.type = 'bandpass';
-          hFilter.frequency.setValueAtTime(1450, now);
-          hFilter.Q.setValueAtTime(2.2, now);
-          const hGain = this.ctx.createGain();
-          hGain.gain.setValueAtTime(peakVol * 0.65, now);
-          hGain.gain.exponentialRampToValueAtTime(0.001, now + 0.028);
-          hNoise.connect(hFilter);
-          hFilter.connect(hGain);
-          hGain.connect(this.ctx.destination);
-          hNoise.start(now);
-        }, burstDelay);
-      }
-    });
-
-    // 2. Spoken laughter via SpeechSynthesis spanning the tower fall and collapse
-    if ('speechSynthesis' in window) {
+    // Stop any previous laugh instance
+    if (this.laughSource) {
       try {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance('Hahaha! Ahahahaha! Hahaha!');
-        utter.pitch = 1.25;
-        utter.rate = 0.92;
-        utter.volume = 0.95;
-        window.speechSynthesis.speak(utter);
+        this.laughSource.stop();
+      } catch (_) {}
+      this.laughSource = null;
+    }
+    if (this.laughAudio) {
+      try {
+        this.laughAudio.pause();
+        this.laughAudio.currentTime = 0;
+      } catch (_) {}
+    }
+
+    // Prefer decoded Web Audio buffer for instant zero-latency playback
+    if (this.startBufferLaugh()) {
+      return;
+    }
+
+    // If Web Audio buffer is currently decoding, queue it to play immediately upon decode completion
+    if (this.isDecodingLaugh) {
+      this.pendingLaughPlay = true;
+      return;
+    }
+
+    // HTML5 Audio fallback
+    if (this.laughAudio) {
+      try {
+        this.laughAudio.volume = 1.0;
+        this.laughAudio.currentTime = 0;
+        const p = this.laughAudio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {});
+        }
       } catch (_) {}
     }
   }

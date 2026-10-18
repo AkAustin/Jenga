@@ -1234,13 +1234,13 @@ window.initJengaGame = function () {
     for (const b of blocks) {
       if (state.activeBlock && b.id === state.activeBlock.id) continue;
       if (b.body.position.y < 0.5) continue;
-      const approxLayer = Math.max(
-        0,
-        Math.round((b.body.position.y - BLOCK_HEIGHT / 2) / BLOCK_HEIGHT)
-      );
-      b.layer = approxLayer;
-      layerCounts.set(approxLayer, (layerCounts.get(approxLayer) || 0) + 1);
-      if (approxLayer > maxLayer) maxLayer = approxLayer;
+      // Ignore blocks that have fallen off the tower footprint or dropped below their layer
+      if (Math.hypot(b.body.position.x, b.body.position.z) > BLOCK_LENGTH * 0.65) continue;
+      if (b.initialPos.y - b.body.position.y > 0.85) continue;
+
+      const layerIdx = b.layer;
+      layerCounts.set(layerIdx, (layerCounts.get(layerIdx) || 0) + 1);
+      if (layerIdx > maxLayer) maxLayer = layerIdx;
     }
 
     const topLayerCount = layerCounts.get(maxLayer) || 0;
@@ -1391,10 +1391,12 @@ window.initJengaGame = function () {
       updateBlockInspector(hitBlock, allowed);
 
       if (state.interactionMode === 'orbit') {
+        window.JengaAudio.playBlockSelect(allowed);
         return;
       }
 
       if (!allowed) {
+        window.JengaAudio.playBlockSelect(false);
         if (state.committedBlock && state.committedBlock.id !== hitBlock.id) {
           showToast('One-hand rule: Finish pulling the block you already started moving!');
         } else {
@@ -1403,6 +1405,7 @@ window.initJengaGame = function () {
         return;
       }
 
+      window.JengaAudio.playBlockSelect(true);
       isDraggingBlock = true;
       state.activeBlock = hitBlock;
       state.turnPhase = 'PULLING';
@@ -1410,9 +1413,7 @@ window.initJengaGame = function () {
       container.className = 'dragging-block';
 
       blocks.forEach((b) => {
-        if (Math.abs(b.layer - hitBlock.layer) <= 2) {
-          b.body.wakeUp();
-        }
+        b.body.wakeUp();
       });
 
       blockDragStartPos.set(
@@ -1468,6 +1469,10 @@ window.initJengaGame = function () {
       b.body.position.z = targetPos.z;
       b.body.velocity.set(0, 0, 0);
       b.body.angularVelocity.set(0, 0, 0);
+
+      if (Math.abs(stepDeltaAlong) > 0.015) {
+        window.JengaAudio.playWoodSlide(b.resistance);
+      }
 
       if (b.resistance > 0.4 && Math.abs(stepDeltaAlong) > 0.01) {
         applyNeighborFrictionTug(b, axis, stepDeltaAlong);
@@ -1564,9 +1569,9 @@ window.initJengaGame = function () {
 
     for (const other of blocks) {
       if (other.id === pulledBlock.id) continue;
+      other.body.wakeUp();
       const dy = other.body.position.y - pulledBlock.body.position.y;
       if (dy >= -0.3 && dy <= BLOCK_HEIGHT * 1.35) {
-        other.body.wakeUp();
         other.body.position.x += axis.x * sign * forceMag;
         other.body.position.z += axis.z * sign * forceMag;
       }
@@ -1579,6 +1584,8 @@ window.initJengaGame = function () {
     block.extracted = true;
     state.turnPhase = 'STACKING';
     highlightLine.visible = false;
+
+    window.JengaAudio.playBlockExtract();
 
     const status = getLayerStatus();
     const targetLayer = status.targetPlacementLayer;
@@ -1596,6 +1603,13 @@ window.initJengaGame = function () {
     }
     block.body.quaternion.copy(q);
     syncMeshToBody(block.mesh, block.body);
+
+    // Wake all remaining tower blocks so any unsupported upper layers immediately begin falling
+    for (const other of blocks) {
+      if (other.id !== block.id) {
+        other.body.wakeUp();
+      }
+    }
 
     showGhostSlots(targetLayer);
     if (state.autoCam) {
@@ -1657,6 +1671,7 @@ window.initJengaGame = function () {
     const y = targetLayer * BLOCK_HEIGHT + BLOCK_HEIGHT / 2 + 0.16;
 
     hideGhostSlots();
+    window.JengaAudio.playBlockPlace();
 
     block.layer = targetLayer;
     block.slot = slotIndex;
@@ -1735,6 +1750,7 @@ window.initJengaGame = function () {
     if (state.turnPhase === 'GAMEOVER') return;
 
     let fallenCount = 0;
+    let fallingMidAirCount = 0;
     let totalDisplacement = 0;
 
     for (const b of blocks) {
@@ -1751,17 +1767,30 @@ window.initJengaGame = function () {
       }
 
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(b.mesh.quaternion);
-      if (up.y < 0.45) {
+      if (Math.abs(up.y) < 0.75) {
         fallenCount++;
       }
 
       const speed = b.body.velocity.length();
       totalDisplacement += speed;
+
+      // Detect blocks tipping, dropping below their layer, or sliding off the tower in mid-air
+      const verticalDrop = b.initialPos.y - b.body.position.y;
+      const horizOffset = Math.hypot(b.body.position.x, b.body.position.z);
+      if (
+        Math.abs(up.y) < 0.92 ||
+        (b.layer >= 1 && verticalDrop > 0.85) ||
+        horizOffset > BLOCK_LENGTH * 0.62
+      ) {
+        fallingMidAirCount++;
+      }
     }
 
     const instabilityPct = Math.min(
       100,
-      Math.round(totalDisplacement * 3.5 + fallenCount * 35)
+      Math.round(
+        totalDisplacement * 3.5 + fallenCount * 35 + fallingMidAirCount * 22
+      )
     );
     elStabilityBar.style.width = `${Math.max(8, instabilityPct)}%`;
     if (instabilityPct < 30) {
@@ -1772,7 +1801,7 @@ window.initJengaGame = function () {
       elStabilityText.textContent = 'CRITICAL TILT!';
     }
 
-    if (fallenCount >= 2) {
+    if (fallenCount >= 1 || fallingMidAirCount >= 2) {
       triggerGameOver();
     }
   }
@@ -1780,12 +1809,24 @@ window.initJengaGame = function () {
   function triggerGameOver() {
     if (state.turnPhase === 'GAMEOVER') return;
     clearPendingGameTimers();
+    const wasStacking = state.turnPhase === 'STACKING';
     state.turnPhase = 'GAMEOVER';
     isDraggingBlock = false;
     controls.enabled = true;
+    container.className = '';
+    highlightLine.visible = false;
     hideGhostSlots();
 
-    // Only play laughter + collapsing wood blocks clatter when the tower collapses and is falling
+    // Wake all blocks (including any block held in STACKING) so the tower falls naturally
+    for (const b of blocks) {
+      b.body.wakeUp();
+    }
+
+    if (wasStacking && state.autoCam && state.viewStyle === 'top') {
+      applyCameraViewStyle(state.savedPreStackViewStyle || 'iso', null, true);
+    }
+
+    // Play laughter + collapsing wood blocks clatter while the tower is falling in mid-air
     window.JengaAudio.playTowerCollapse();
 
     const loser = state.players[state.currentPlayerIdx];
@@ -1817,7 +1858,7 @@ window.initJengaGame = function () {
         } stories high (${state.blocksMovedTotal} successful moves).`;
       }
       modal.classList.add('open');
-    }, 2400);
+    }, 2800);
   }
 
   // UI & HUD Updates
@@ -2684,7 +2725,7 @@ window.initJengaGame = function () {
     }
 
     checkCounter++;
-    if (checkCounter % 12 === 0 && state.turnPhase !== 'SELECT') {
+    if (checkCounter % 2 === 0 && state.turnPhase !== 'GAMEOVER') {
       checkTowerCollapse();
     }
 
