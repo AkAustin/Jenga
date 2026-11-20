@@ -1115,6 +1115,8 @@ window.initJengaGame = function () {
       window.JengaAudio.stopAll();
     }
     state.currentSeed = seed;
+    state.lastMoverIdx = null;
+    collapseTickCount = 0;
 
     blocks.forEach((b) => {
       scene.remove(b.mesh);
@@ -1233,10 +1235,9 @@ window.initJengaGame = function () {
 
     for (const b of blocks) {
       if (state.activeBlock && b.id === state.activeBlock.id) continue;
-      if (b.body.position.y < 0.5) continue;
-      // Ignore blocks that have fallen off the tower footprint or dropped below their layer
-      if (Math.hypot(b.body.position.x, b.body.position.z) > BLOCK_LENGTH * 0.65) continue;
-      if (b.initialPos.y - b.body.position.y > 0.85) continue;
+      // Ignore blocks that have fallen onto the table or completely off the tower
+      if (b.body.position.y < 1.0 && b.layer >= 2) continue;
+      if (Math.hypot(b.body.position.x, b.body.position.z) > BLOCK_LENGTH * 0.85) continue;
 
       const layerIdx = b.layer;
       layerCounts.set(layerIdx, (layerCounts.get(layerIdx) || 0) + 1);
@@ -1733,11 +1734,18 @@ window.initJengaGame = function () {
     state.players[state.currentPlayerIdx].moves += 1;
     state.blocksMovedTotal += 1;
     state.turnNumber += 1;
+    state.lastMoverIdx = state.currentPlayerIdx;
     state.currentPlayerIdx = (state.currentPlayerIdx + 1) % state.players.length;
     state.activeBlock = null;
     state.committedBlock = null;
     state.turnPhase = 'SELECT';
     highlightActivePlayerChair();
+
+    if (window.JengaAudio && typeof window.JengaAudio.playTurnSuccess === 'function') {
+      window.JengaAudio.playTurnSuccess();
+    }
+    showToast(`${state.players[state.lastMoverIdx].name} placed block successfully!`);
+
     if (state.autoCam) {
       // Smoothly glide camera around the circular table to the active player's seat POV
       const nextStyle =
@@ -1752,63 +1760,118 @@ window.initJengaGame = function () {
     updateHUD();
   }
 
+  let collapseTickCount = 0;
+
   function checkTowerCollapse() {
     if (state.turnPhase === 'GAMEOVER') return;
 
-    let fallenCount = 0;
-    let fallingMidAirCount = 0;
-    let totalDisplacement = 0;
+    let tableFallenCount = 0;
+    let midAirPlungingCount = 0;
+    let topBlocksCount = 0;
+    let topSumX = 0;
+    let topSumZ = 0;
+    let maxSpeed = 0;
+
+    const currentPeakLayer = Math.max(
+      INITIAL_LAYERS - 1,
+      ...blocks.map((b) => b.layer)
+    );
+    const topThresholdLayer = Math.floor(currentPeakLayer * 0.65);
+    let highestBlockY = 0;
 
     for (const b of blocks) {
-      if (
-        state.activeBlock &&
-        b.id === state.activeBlock.id &&
-        (state.turnPhase === 'PULLING' || state.turnPhase === 'STACKING')
-      ) {
-        continue;
+      const pos = b.body.position;
+      const vel = b.body.velocity;
+      const speed = vel.length();
+      if (speed > maxSpeed) maxSpeed = speed;
+      if (pos.y > highestBlockY) highestBlockY = pos.y;
+
+      // Track center of mass of the top third of the tower for true physical lean
+      if (b.layer >= topThresholdLayer) {
+        topBlocksCount++;
+        topSumX += pos.x;
+        topSumZ += pos.z;
       }
 
-      if (b.layer >= 1 && b.body.position.y < 1.15) {
-        fallenCount++;
+      // Ignore active block during PULLING, STACKING, or normal SETTLING on top
+      const isActiveBlock = Boolean(state.activeBlock && b.id === state.activeBlock.id);
+      if (isActiveBlock) {
+        if (state.turnPhase === 'PULLING' || state.turnPhase === 'STACKING') {
+          continue;
+        }
+        if (state.turnPhase === 'SETTLING' && pos.y > 2.0 && Math.hypot(pos.x, pos.z) < 6.5) {
+          continue;
+        }
       }
 
+      // 1. Blocks fallen to the tabletop or off the table:
+      // Table surface is y = 0.0, block center when resting flat is y = 0.75.
+      // Layer 0 blocks normally rest at y = 0.75.
+      // For Layer >= 2: if center has dropped to y < 1.0, it is down on the tabletop.
+      // Or if any block has fallen off the table into the room (pos.y < -1.5).
+      if (pos.y < -1.5) {
+        tableFallenCount++;
+      } else if (b.layer >= 2 && pos.y < 1.0) {
+        tableFallenCount++;
+      } else if (b.layer === 1 && pos.y < 0.95 && Math.hypot(pos.x, pos.z) > 4.5) {
+        tableFallenCount++;
+      }
+
+      // 2. Mid-air catastrophic cascade:
+      // In mid-air collapse, multiple blocks are in free-fall (gravity = -32 cm/s^2),
+      // so downward velocity vel.y rapidly accelerates below -6.5 cm/s.
+      // Stationary/settling blocks have vel.y between -0.5 and +0.5.
+      const expectedY = b.layer * BLOCK_HEIGHT + BLOCK_HEIGHT / 2;
       const up = new THREE.Vector3(0, 1, 0).applyQuaternion(b.mesh.quaternion);
-      if (Math.abs(up.y) < 0.75) {
-        fallenCount++;
-      }
-
-      const speed = b.body.velocity.length();
-      totalDisplacement += speed;
-
-      // Detect blocks tipping, dropping below their layer, or sliding off the tower in mid-air
-      const verticalDrop = b.initialPos.y - b.body.position.y;
-      const horizOffset = Math.hypot(b.body.position.x, b.body.position.z);
-      if (
-        Math.abs(up.y) < 0.92 ||
-        (b.layer >= 1 && verticalDrop > 0.85) ||
-        horizOffset > BLOCK_LENGTH * 0.62
-      ) {
-        fallingMidAirCount++;
+      const isPlunging = vel.y < -6.5 && (expectedY - pos.y > 2.2 || Math.abs(up.y) < 0.65);
+      if (isPlunging) {
+        midAirPlungingCount++;
       }
     }
 
-    const instabilityPct = Math.min(
-      100,
-      Math.round(
-        totalDisplacement * 3.5 + fallenCount * 35 + fallingMidAirCount * 22
+    // Check if the entire top peak of the tower has plummeted in mid-air
+    const expectedPeakY = (state.towerPeakLayer + 1) * BLOCK_HEIGHT;
+    const peakPlunged = highestBlockY < expectedPeakY - 5.5 && maxSpeed > 4.0;
+
+    // A real collapse occurs when:
+    // A) Ground-level: 2 or more upper blocks have hit the tabletop / floor
+    // B) Mid-air cascade: at least 4 blocks are simultaneously in plunging free-fall, or peak plummeted
+    const isCollapsingNow =
+      tableFallenCount >= 2 ||
+      midAirPlungingCount >= 4 ||
+      (peakPlunged && midAirPlungingCount >= 2);
+
+    if (isCollapsingNow) {
+      collapseTickCount++;
+      if (collapseTickCount >= 3) {
+        // Confirmed collapse across 3 physics ticks (~50ms)
+        triggerGameOver();
+        return;
+      }
+    } else {
+      collapseTickCount = 0;
+    }
+
+    // True physical stability meter calculation
+    const avgTopX = topBlocksCount > 0 ? topSumX / topBlocksCount : 0;
+    const avgTopZ = topBlocksCount > 0 ? topSumZ / topBlocksCount : 0;
+    const leanDist = Math.hypot(avgTopX, avgTopZ); // 0 = centered, 1-2cm = leaning, 3+ cm = critical
+
+    let instabilityPct = Math.round(
+      Math.min(
+        95,
+        leanDist * 22 + Math.min(25, maxSpeed * 5.0) + (tableFallenCount > 0 ? 30 : 0)
       )
     );
-    elStabilityBar.style.width = `${Math.max(8, instabilityPct)}%`;
-    if (instabilityPct < 30) {
+    instabilityPct = Math.max(10, Math.min(95, instabilityPct));
+
+    elStabilityBar.style.width = `${instabilityPct}%`;
+    if (instabilityPct < 35) {
       elStabilityText.textContent = 'Solid & Balanced';
-    } else if (instabilityPct < 65) {
+    } else if (instabilityPct < 68) {
       elStabilityText.textContent = 'Shifting Weight...';
     } else {
-      elStabilityText.textContent = 'CRITICAL TILT!';
-    }
-
-    if (fallenCount >= 1 || fallingMidAirCount >= 2) {
-      triggerGameOver();
+      elStabilityText.textContent = 'Critical Tilt!';
     }
   }
 
@@ -1823,7 +1886,7 @@ window.initJengaGame = function () {
     highlightLine.visible = false;
     hideGhostSlots();
 
-    // Wake all blocks (including any block held in STACKING) so the tower falls naturally
+    // Wake all blocks so the remaining structure tumbles completely and naturally
     for (const b of blocks) {
       b.body.wakeUp();
     }
@@ -1832,17 +1895,41 @@ window.initJengaGame = function () {
       applyCameraViewStyle(state.savedPreStackViewStyle || 'iso', null, true);
     }
 
-    // Play laughter + collapsing wood blocks clatter while the tower is falling in mid-air
-    window.JengaAudio.playTowerCollapse();
+    // Determine who caused the collapse according to official Jenga rules:
+    // If during pulling, stacking, or settling, the active player caused it.
+    // If during 'SELECT' before current player touched/pulled a block, previous player who placed the unstable block loses!
+    let loserIdx = state.currentPlayerIdx;
+    if (
+      state.turnPhase === 'SELECT' &&
+      !isDraggingBlock &&
+      !state.activeBlock &&
+      !state.committedBlock
+    ) {
+      if (typeof state.lastMoverIdx === 'number') {
+        loserIdx = state.lastMoverIdx;
+      } else {
+        loserIdx =
+          (state.currentPlayerIdx - 1 + state.players.length) %
+          state.players.length;
+      }
+    }
 
-    const loser = state.players[state.currentPlayerIdx];
-    const winnerIdx =
-      (state.currentPlayerIdx - 1 + state.players.length) % state.players.length;
-    const winner = state.players[winnerIdx];
+    const loser = state.players[loserIdx] || state.players[0];
+    const winnerIdx = (loserIdx + 1) % state.players.length;
+    const winner = state.players[winnerIdx] || state.players[0];
 
+    // Play YouTube Short laughter + tumbling blocks clatter immediately as the tower falls through the air
+    if (window.JengaAudio && typeof window.JengaAudio.playTowerCollapse === 'function') {
+      window.JengaAudio.playTowerCollapse();
+    }
+
+    elStabilityBar.style.width = '100%';
+    elStabilityText.textContent = 'TOWER COLLAPSED!';
     showToast(`Hahaha! ${loser.name} collapsed the tower!`);
     updateHUD();
 
+    // Allow 2.6 seconds for blocks to completely finish tumbling and crashing onto the table
+    // before opening the Game Over modal
     gameOverTimerId = setTimeout(() => {
       gameOverTimerId = null;
       if (state.turnPhase !== 'GAMEOVER') return;
@@ -1857,14 +1944,16 @@ window.initJengaGame = function () {
         } stories (${state.blocksMovedTotal} blocks moved) before it tumbled.`;
       } else {
         // Play "Yey!" victory celebration sound + fanfare + applause for the winner!
-        window.JengaAudio.playWinYey();
+        if (window.JengaAudio && typeof window.JengaAudio.playWinYey === 'function') {
+          window.JengaAudio.playWinYey();
+        }
         title.textContent = `Yey! ${winner.name} Wins`;
         desc.textContent = `Hahaha! The tower collapsed on ${loser.name}'s turn at ${
           state.towerPeakLayer + 1
         } stories high (${state.blocksMovedTotal} successful moves).`;
       }
       modal.classList.add('open');
-    }, 2800);
+    }, 2600);
   }
 
   // UI & HUD Updates
